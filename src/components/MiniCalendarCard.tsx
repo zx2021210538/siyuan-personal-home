@@ -57,33 +57,36 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
   };
 
   return (
-    <section className="sph-card p-4 flex flex-col gap-3">
+    <section className="sph-card p-5 flex flex-col gap-3.5">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <span
-            className="w-6 h-6 rounded-md flex items-center justify-center"
+            className="w-7 h-7 rounded-lg flex items-center justify-center"
             style={{ backgroundColor: 'var(--sph-accent-soft)', color: 'var(--sph-accent)' }}
           >
             <Calendar size={14} />
           </span>
-          <h2 className="text-sm font-semibold m-0">日记月历</h2>
+          <h2 className="text-[15px] font-semibold">日记月历</h2>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div
+          className="inline-flex items-center rounded-lg p-0.5"
+          style={{ backgroundColor: 'var(--sph-tile)' }}
+        >
           <button
             type="button"
-            className="sph-btn !p-1"
+            className="sph-btn-ghost !p-1"
             aria-label="上个月"
             onClick={() => shiftMonth(-1)}
           >
             <ChevronLeft size={14} />
           </button>
-          <span className="text-xs font-medium px-1.5 min-w-[74px] text-center">
+          <span className="text-xs font-medium px-2 min-w-[76px] text-center sph-tabular">
             {year}年{month}月
           </span>
           <button
             type="button"
-            className="sph-btn !p-1"
+            className="sph-btn-ghost !p-1"
             aria-label="下个月"
             onClick={() => shiftMonth(1)}
           >
@@ -95,7 +98,7 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
       <div className="flex items-center justify-between gap-2">
         <select
           aria-label="切换日记本"
-          className="sph-input !py-1 !px-2 !text-xs flex-1 min-w-0"
+          className="sph-select flex-1 min-w-0"
           value={activeNotebookId}
           onChange={(e) => onSelectNotebook(e.target.value)}
           disabled={openNotebooks.length === 0}
@@ -111,21 +114,29 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
           )}
         </select>
 
-        <button type="button" className="sph-btn !py-1 !px-2.5 shrink-0" onClick={onJumpToday}>
+        <button
+          type="button"
+          className="sph-btn px-3 py-1.5 shrink-0"
+          onClick={onJumpToday}
+        >
           今天
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center">
+      <div className="grid grid-cols-7 gap-1 text-center pt-0.5">
         {weekHeaders.map((w) => (
-          <div key={w} className="text-[11px] py-1" style={{ color: 'var(--sph-muted)' }}>
+          <div
+            key={w}
+            className="text-[11px] font-medium py-1 select-none"
+            style={{ color: 'var(--sph-subtle)' }}
+          >
             {w}
           </div>
         ))}
 
         {cells.map((cell, idx) => {
           if (!cell) {
-            return <div key={`empty-${idx}`} className="h-8" />;
+            return <div key={`empty-${idx}`} className="h-9" />;
           }
           const info = daysMap[cell.date];
           const isToday = cell.date === todayStr;
@@ -138,35 +149,61 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
               type="button"
               aria-label={`${cell.date}${hasDiary ? ' 已有日记' : ''}`}
               onClick={() => onClickDate(cell.date)}
-              className="relative h-8 rounded-lg border-0 flex flex-col items-center justify-center text-xs cursor-pointer transition-colors"
+              className={`sph-cal-day sph-tabular relative h-9 flex flex-col items-center justify-center text-[12.5px] ${isToday ? 'sph-cal-today' : ''}`}
               style={{
                 backgroundColor: isToday
                   ? 'var(--sph-accent)'
                   : hasDiary
                     ? 'var(--sph-accent-soft)'
                     : 'transparent',
-                color: isToday ? 'var(--sph-accent-fg)' : 'var(--sph-text)',
+                color: isToday
+                  ? 'var(--sph-accent-fg)'
+                  : hasDiary
+                    ? 'var(--sph-accent)'
+                    : 'var(--sph-text)',
                 fontWeight: isToday || hasDiary ? 600 : 400,
+                boxShadow: isToday
+                  ? '0 2px 8px -2px color-mix(in srgb, var(--sph-accent) 55%, transparent)'
+                  : 'none',
               }}
             >
-              <span>{cell.day}</span>
+              <span className="leading-none">{cell.day}</span>
               {isToday && (
                 <span
-                  className="w-1 h-1 rounded-full mt-0.5"
-                  style={{ backgroundColor: 'var(--sph-accent-fg)' }}
+                  className="w-1 h-1 rounded-full mt-1"
+                  style={{ backgroundColor: 'var(--sph-accent-fg)', opacity: 0.9 }}
                 />
               )}
               {hasTodo && (
                 <span
                   data-testid={`cal-todo-badge-${cell.date}`}
                   title="日记含未完成待办"
-                  className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
+                  className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
                   style={{ backgroundColor: '#f59e0b' }}
                 />
               )}
             </button>
           );
         })}
+      </div>
+
+      <div
+        className="flex items-center justify-between text-[11px] pt-1"
+        style={{ color: 'var(--sph-subtle)', borderTop: '1px solid var(--sph-border)' }}
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="w-2.5 h-2.5 rounded-full inline-block"
+            style={{ backgroundColor: 'var(--sph-accent-soft)' }}
+          />
+          <span>已有日记</span>
+        </span>
+        {showTodoBadge && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: '#f59e0b' }} />
+            <span>含未完成待办</span>
+          </span>
+        )}
       </div>
     </section>
   );

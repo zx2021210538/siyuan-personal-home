@@ -63,6 +63,14 @@ function formatChineseDateHeader(todayStr: string): string {
   return `${y}年${m}月${d}日 ${WEEKDAYS[dt.getDay()] ?? ''}`;
 }
 
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 6) return '夜深了';
+  if (hour < 12) return '早安';
+  if (hour < 18) return '下午好';
+  return '晚上好';
+}
+
 function generateId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -753,13 +761,41 @@ export const HomePage: React.FC<HomePageProps> = ({
     ? visibleHabitsSorted.findIndex((h) => h.id === activeHabit.id)
     : -1;
 
+  const activeTaskCount = useMemo(
+    () => tasksStore.tasks.filter((t) => !t.deleted && !t.completed).length,
+    [tasksStore.tasks],
+  );
+  const doneHabitsTodayCount = useMemo(
+    () =>
+      visibleHabitsSorted.filter((h) =>
+        Boolean(habitsStore.checkins[h.id]?.[todayStr]?.done),
+      ).length,
+    [visibleHabitsSorted, habitsStore.checkins, todayStr],
+  );
+
   return (
     <div className={`sph-root ${settings.useThemeAccent ? 'sph-use-accent' : ''}`}>
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-6 py-5 flex flex-col gap-4">
-        <header className="flex items-center justify-between gap-3">
-          <div className="flex items-baseline gap-3 min-w-0">
-            <h1 className="text-lg font-semibold m-0">个人主页</h1>
-            <span className="text-xs truncate" style={{ color: 'var(--sph-muted)' }}>
+      <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-6 sm:py-8 flex flex-col gap-5">
+        <header className="flex flex-wrap items-end justify-between gap-4 pb-1">
+          <div className="min-w-0 flex flex-col gap-1">
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-[22px] font-semibold tracking-tight leading-none">
+                {getGreeting()}，个人主页
+              </h1>
+              <span
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium sph-tabular"
+                style={{
+                  backgroundColor: 'var(--sph-card)',
+                  border: '1px solid var(--sph-border)',
+                  color: 'var(--sph-muted)',
+                }}
+              >
+                <span>习惯 {doneHabitsTodayCount}/{visibleHabitsSorted.length}</span>
+                <span style={{ color: 'var(--sph-subtle)' }}>·</span>
+                <span>待办 {activeTaskCount} 项</span>
+              </span>
+            </div>
+            <span className="text-xs sph-tabular" style={{ color: 'var(--sph-muted)' }}>
               {formatChineseDateHeader(todayStr)}
             </span>
           </div>
@@ -767,7 +803,7 @@ export const HomePage: React.FC<HomePageProps> = ({
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              className="sph-btn"
+              className="sph-btn px-3 py-1.5"
               aria-label="刷新主页"
               disabled={refreshing}
               onClick={() => void bootstrapAll()}
@@ -777,7 +813,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             </button>
             <button
               type="button"
-              className="sph-btn"
+              className="sph-btn px-3 py-1.5"
               aria-label="打开设置"
               onClick={() => setSettingsOpen(true)}
             >

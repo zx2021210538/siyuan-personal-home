@@ -72,35 +72,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+      className="sph-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="sph-card w-full max-w-md p-5 flex flex-col gap-4"
+        className="sph-modal w-full max-w-md p-6 flex flex-col gap-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold m-0">个人主页设置</h3>
-          <button type="button" className="sph-btn !p-1" aria-label="关闭设置" onClick={onClose}>
-            <X size={14} />
+          <div>
+            <h3 className="text-base font-semibold">个人主页设置</h3>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--sph-muted)' }}>
+              定制入口、日历习惯与主题偏好
+            </p>
+          </div>
+          <button type="button" className="sph-btn-ghost !p-1.5" aria-label="关闭设置" onClick={onClose}>
+            <X size={15} />
           </button>
         </div>
 
-        <div className="flex flex-col gap-3 text-xs">
-          <label className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-3.5 text-[13px]">
+          <div className="flex items-center justify-between gap-3">
             <span>启动思源时自动打开个人主页</span>
-            <input
-              type="checkbox"
-              checked={settings.autoOpenOnStart}
-              onChange={(e) => onChangeSettings({ autoOpenOnStart: e.target.checked })}
-            />
-          </label>
+            <label className="sph-switch">
+              <input
+                type="checkbox"
+                checked={settings.autoOpenOnStart}
+                onChange={(e) => onChangeSettings({ autoOpenOnStart: e.target.checked })}
+              />
+              <span className="sph-switch-track">
+                <span className="sph-switch-thumb" />
+              </span>
+            </label>
+          </div>
 
-          <label className="flex items-center justify-between gap-2">
-            <span>顶栏图标位置（重载后生效）</span>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div>顶栏图标位置</div>
+              <div className="text-[11px]" style={{ color: 'var(--sph-subtle)' }}>
+                下次重载插件后生效
+              </div>
+            </div>
             <select
-              className="sph-input !py-1 !text-xs"
+              className="sph-select"
               value={settings.topBarPosition}
               onChange={(e) =>
                 onChangeSettings({ topBarPosition: e.target.value as TopBarPosition })
@@ -109,12 +123,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <option value="left">顶栏左侧</option>
               <option value="right">顶栏右侧</option>
             </select>
-          </label>
+          </div>
 
-          <label className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-3">
             <span>每周起始日</span>
             <select
-              className="sph-input !py-1 !text-xs"
+              className="sph-select"
               value={String(settings.weekStartDay)}
               onChange={(e) =>
                 onChangeSettings({ weekStartDay: Number(e.target.value) as WeekStartDay })
@@ -123,43 +137,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <option value="1">星期一</option>
               <option value="0">星期日</option>
             </select>
-          </label>
+          </div>
 
-          <label className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-3">
             <span>日历显示未完成待办角标</span>
-            <input
-              type="checkbox"
-              checked={settings.showDiaryTodoBadge}
-              onChange={(e) => onChangeSettings({ showDiaryTodoBadge: e.target.checked })}
-            />
-          </label>
+            <label className="sph-switch">
+              <input
+                type="checkbox"
+                checked={settings.showDiaryTodoBadge}
+                onChange={(e) => onChangeSettings({ showDiaryTodoBadge: e.target.checked })}
+              />
+              <span className="sph-switch-track">
+                <span className="sph-switch-thumb" />
+              </span>
+            </label>
+          </div>
 
-          <label className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-3">
             <span>跟随思源主题强调色</span>
-            <input
-              type="checkbox"
-              checked={settings.useThemeAccent}
-              onChange={(e) => onChangeSettings({ useThemeAccent: e.target.checked })}
-            />
-          </label>
+            <label className="sph-switch">
+              <input
+                type="checkbox"
+                checked={settings.useThemeAccent}
+                onChange={(e) => onChangeSettings({ useThemeAccent: e.target.checked })}
+              />
+              <span className="sph-switch-track">
+                <span className="sph-switch-thumb" />
+              </span>
+            </label>
+          </div>
         </div>
 
         <div
-          className="pt-3 flex flex-col gap-2"
+          className="pt-4 flex flex-col gap-2.5"
           style={{ borderTop: '1px solid var(--sph-border)' }}
         >
-          <div className="text-xs font-medium">数据备份与恢复</div>
-          <div className="text-[11px]" style={{ color: 'var(--sph-muted)' }}>
-            所有任务、习惯与打卡记录存放在思源同步目录，可随时导出 JSON 备份或恢复。
+          <div className="text-[13px] font-semibold">数据备份与恢复</div>
+          <div className="text-xs leading-relaxed" style={{ color: 'var(--sph-muted)' }}>
+            所有任务、习惯与打卡记录存放在思源同步目录，可随时导出 JSON 备份或导入恢复。
           </div>
-          <div className="flex items-center gap-2 pt-1">
-            <button type="button" className="sph-btn flex-1" onClick={handleExport}>
+          <div className="flex items-center gap-2.5 pt-1">
+            <button type="button" className="sph-btn flex-1 py-2" onClick={handleExport}>
               <Download size={13} />
               <span>导出 JSON 备份</span>
             </button>
             <button
               type="button"
-              className="sph-btn flex-1"
+              className="sph-btn flex-1 py-2"
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload size={13} />
@@ -175,12 +199,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {statusMsg && (
-            <div className="text-[11px]" style={{ color: '#10b981' }}>
+            <div className="text-xs font-medium" style={{ color: '#10b981' }}>
               {statusMsg}
             </div>
           )}
           {errorMsg && (
-            <div className="text-[11px]" style={{ color: '#ef4444' }}>
+            <div className="text-xs font-medium" style={{ color: '#e11d48' }}>
               {errorMsg}
             </div>
           )}

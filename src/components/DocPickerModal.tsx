@@ -53,12 +53,11 @@ export const DocPickerModal: React.FC<DocPickerModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+      className="sph-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="sph-card w-full max-w-md p-4 flex flex-col gap-3"
+        className="sph-modal w-full max-w-md p-5 flex flex-col gap-3.5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">

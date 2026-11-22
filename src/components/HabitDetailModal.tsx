@@ -158,12 +158,11 @@ export const HabitDetailModal: React.FC<HabitDetailModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+      className="sph-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="sph-card w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 flex flex-col gap-4"
+        className="sph-modal w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-2">
