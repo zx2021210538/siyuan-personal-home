@@ -4,6 +4,7 @@ import type { SearchDocHit } from '../services/siyuanApi';
 
 export interface DocPickerModalProps {
   open: boolean;
+  title?: string;
   onClose: () => void;
   onSearch: (keyword: string) => Promise<SearchDocHit[]>;
   onSelect: (doc: { id: string; title: string }) => void;
@@ -11,6 +12,7 @@ export interface DocPickerModalProps {
 
 export const DocPickerModal: React.FC<DocPickerModalProps> = ({
   open,
+  title = '关联思源笔记',
   onClose,
   onSearch,
   onSelect,
@@ -53,7 +55,7 @@ export const DocPickerModal: React.FC<DocPickerModalProps> = ({
 
   return (
     <div
-      className="sph-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-4"
+      className="sph-backdrop fixed inset-0 z-[1100] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
@@ -61,7 +63,7 @@ export const DocPickerModal: React.FC<DocPickerModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold m-0">关联思源笔记</h3>
+          <h3 className="text-sm font-semibold m-0">{title}</h3>
           <button type="button" className="sph-btn !p-1" aria-label="关闭" onClick={onClose}>
             <X size={14} />
           </button>

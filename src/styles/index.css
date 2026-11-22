@@ -147,7 +147,7 @@
   .sph-nav-bar {
     position: sticky;
     top: 0;
-    z-index: 30;
+    z-index: 2;
     background-color: color-mix(in srgb, var(--sph-canvas) 88%, transparent);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
@@ -549,7 +549,7 @@
     transform: scale(1.22);
     outline: 1.5px solid var(--sph-accent);
     outline-offset: 1px;
-    z-index: 2;
+    z-index: 1;
   }
 
   .sph-cal-day {

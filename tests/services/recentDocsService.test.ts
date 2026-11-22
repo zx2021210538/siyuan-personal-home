@@ -230,4 +230,75 @@ describe('recentDocsService', () => {
     );
     expect(readAll.items.map((i) => i.id)).toEqual(['d-tech']);
   });
+
+  it('hides arbitrary parent document IDs and their entire descendant subtrees across modified and read queries', async () => {
+    const sqls: string[] = [];
+    const api = createMockApi(async (stmt) => {
+      sqls.push(stmt);
+      if (stmt.includes("type = 'd'") && stmt.includes('id IN (')) {
+        return [
+          {
+            id: 'd-normal',
+            box: 'nb-1',
+            path: '/d-normal.sy',
+            hpath: '/Normal',
+            content: '普通笔记',
+            tag: '',
+            ial: '',
+            updated: '20261122120000',
+          },
+          {
+            id: 'd-sub-root',
+            box: 'nb-1',
+            path: '/d-sub-root.sy',
+            hpath: '/日记根目录',
+            content: '日记根目录',
+            tag: '',
+            ial: '',
+            updated: '20261122115000',
+          },
+          {
+            id: 'd-sub-child',
+            box: 'nb-1',
+            path: '/d-sub-root/202611/d-sub-child.sy',
+            hpath: '/日记根目录/2026-11/2026-11-22',
+            content: '2026-11-22',
+            tag: '',
+            ial: '',
+            updated: '20261122114000',
+          },
+        ];
+      }
+      return [];
+    });
+
+    await fetchRecentModifiedDocs(api, NOTEBOOKS, {
+      notebookId: 'nb-1',
+      hideDailyNotes: false,
+      hiddenIds: ['d-sub-root', 'nb-2'],
+      limit: 12,
+      offset: 0,
+    });
+    expect(sqls[0]).toContain("box = 'nb-1'");
+    expect(sqls[0]).toContain("id NOT IN ('d-sub-root','nb-2')");
+    expect(sqls[0]).toContain("path NOT LIKE '%/d-sub-root/%'");
+
+    const readRes = await fetchRecentReadDocs(
+      api,
+      NOTEBOOKS,
+      [
+        { docId: 'd-normal', lastReadAt: 3000, readCount: 1 },
+        { docId: 'd-sub-root', lastReadAt: 2000, readCount: 1 },
+        { docId: 'd-sub-child', lastReadAt: 1000, readCount: 1 },
+      ],
+      {
+        notebookId: 'nb-1',
+        hideDailyNotes: false,
+        hiddenIds: ['d-sub-root'],
+        limit: 12,
+        offset: 0,
+      },
+    );
+    expect(readRes.items.map((i) => i.id)).toEqual(['d-normal']);
+  });
 });

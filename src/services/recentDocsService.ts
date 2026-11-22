@@ -13,6 +13,7 @@ const IMAGE_ASSET_REGEX = /\.(png|jpe?g|webp|gif|avif|svg)$/i;
 interface DocRow {
   id: string;
   box: string;
+  path?: string;
   hpath: string;
   content: string;
   tag: string;
@@ -24,9 +25,74 @@ export interface RecentDocsQuery {
   notebookId?: string | 'all';
   hideDailyNotes: boolean;
   hiddenNotebookIds?: string[];
+  hiddenIds?: string[];
   keyword?: string;
   limit: number;
   offset: number;
+}
+
+function collectEffectiveHiddenIds(query: RecentDocsQuery): string[] {
+  const combined = [
+    ...(query.hiddenNotebookIds ?? []),
+    ...(query.hiddenIds ?? []),
+  ]
+    .map((id) => (typeof id === 'string' ? id.trim() : ''))
+    .filter((id) => id.length > 0);
+  const unique = Array.from(new Set(combined));
+  if (query.notebookId && query.notebookId !== 'all') {
+    return unique.filter((id) => id !== query.notebookId);
+  }
+  return unique;
+}
+
+function isDocExcludedByHiddenIds(
+  row: { id: string; box: string; path?: string },
+  hiddenIds: string[],
+): boolean {
+  for (const hid of hiddenIds) {
+    if (row.box === hid || row.id === hid) return true;
+    if (row.path && (row.path.includes(`/${hid}/`) || row.path.endsWith(`/${hid}.sy`))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function resolveHiddenIdLabels(
+  api: SiYuanClient,
+  notebooks: SiYuanNotebook[],
+  ids: string[],
+): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  const nbMap = new Map(notebooks.map((nb) => [nb.id, nb.name]));
+  const docIdsToLookup: string[] = [];
+
+  for (const raw of ids) {
+    const id = raw.trim();
+    if (!id) continue;
+    const nbName = nbMap.get(id);
+    if (nbName) {
+      result[id] = nbName;
+    } else {
+      docIdsToLookup.push(id);
+    }
+  }
+
+  if (docIdsToLookup.length > 0) {
+    try {
+      const inClause = docIdsToLookup.map((id) => `'${escapeSqlString(id)}'`).join(',');
+      const rows = await api.sql<{ id: string; content: string; hpath: string }>(
+        `SELECT id, content, hpath FROM blocks WHERE id IN (${inClause}) AND type = 'd' LIMIT ${docIdsToLookup.length}`,
+      );
+      for (const row of rows) {
+        result[row.id] = row.content || row.hpath || row.id;
+      }
+    } catch {
+      // fallback to raw IDs
+    }
+  }
+
+  return result;
 }
 
 export class RecentReadTracker {
@@ -127,13 +193,15 @@ export async function fetchRecentModifiedDocs(
   const predicates: string[] = [`type = 'd'`];
   if (query.notebookId && query.notebookId !== 'all') {
     predicates.push(`box = '${escapeSqlString(query.notebookId)}'`);
-  } else if (query.hiddenNotebookIds && query.hiddenNotebookIds.length > 0) {
-    const excluded = query.hiddenNotebookIds
-      .filter((id) => typeof id === 'string' && id.trim().length > 0)
-      .map((id) => `'${escapeSqlString(id.trim())}'`)
-      .join(',');
-    if (excluded) {
-      predicates.push(`box NOT IN (${excluded})`);
+  }
+  const effectiveHiddenIds = collectEffectiveHiddenIds(query);
+  if (effectiveHiddenIds.length > 0) {
+    const excludedIn = effectiveHiddenIds.map((id) => `'${escapeSqlString(id)}'`).join(',');
+    predicates.push(`box NOT IN (${excludedIn})`);
+    predicates.push(`id NOT IN (${excludedIn})`);
+    for (const hid of effectiveHiddenIds) {
+      const safeLike = escapeSqlLike(hid);
+      predicates.push(`path NOT LIKE '%/${safeLike}/%' ESCAPE '\\'`);
     }
   }
   if (query.hideDailyNotes) {
@@ -151,7 +219,7 @@ export async function fetchRecentModifiedDocs(
 
   const fetchLimit = query.limit + 1;
   const rows = await api.sql<DocRow>(
-    `SELECT id, box, hpath, content, tag, ial, updated FROM blocks WHERE ${predicates.join(' AND ')} ORDER BY updated DESC LIMIT ${fetchLimit} OFFSET ${Math.max(0, query.offset)}`,
+    `SELECT id, box, path, hpath, content, tag, ial, updated FROM blocks WHERE ${predicates.join(' AND ')} ORDER BY updated DESC LIMIT ${fetchLimit} OFFSET ${Math.max(0, query.offset)}`,
   );
 
   const hasMore = rows.length > query.limit;
@@ -175,7 +243,7 @@ export async function fetchRecentReadDocs(
   const inClause = allIds.map((id) => `'${escapeSqlString(id)}'`).join(',');
   const [docRows, dailyAttrs] = await Promise.all([
     api.sql<DocRow>(
-      `SELECT id, box, hpath, content, tag, ial, updated FROM blocks WHERE id IN (${inClause}) AND type = 'd' LIMIT ${allIds.length}`,
+      `SELECT id, box, path, hpath, content, tag, ial, updated FROM blocks WHERE id IN (${inClause}) AND type = 'd' LIMIT ${allIds.length}`,
     ),
     query.hideDailyNotes
       ? api.sql<{ root_id: string }>(
@@ -199,7 +267,7 @@ export async function fetchRecentReadDocs(
   }
 
   const dailySet = new Set(dailyAttrs.map((a) => a.root_id));
-  const hiddenSet = new Set(query.hiddenNotebookIds ?? []);
+  const effectiveHiddenIds = collectEffectiveHiddenIds(query);
   const kw = query.keyword?.trim().toLowerCase() ?? '';
   const readAtMap = new Map(records.map((r) => [r.docId, r.lastReadAt]));
 
@@ -207,11 +275,8 @@ export async function fetchRecentReadDocs(
   for (const rec of records) {
     const row = rowMap.get(rec.docId);
     if (!row) continue;
-    if (query.notebookId && query.notebookId !== 'all') {
-      if (row.box !== query.notebookId) continue;
-    } else if (hiddenSet.has(row.box)) {
-      continue;
-    }
+    if (query.notebookId && query.notebookId !== 'all' && row.box !== query.notebookId) continue;
+    if (effectiveHiddenIds.length > 0 && isDocExcludedByHiddenIds(row, effectiveHiddenIds)) continue;
     if (query.hideDailyNotes && dailySet.has(row.id)) continue;
     if (
       kw &&

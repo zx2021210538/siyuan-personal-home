@@ -212,3 +212,13 @@ export function groupDocsByDateBucket<T>(
 
   return groups;
 }
+
+export function parseHiddenIdInput(raw: string): string[] {
+  if (!raw || typeof raw !== 'string') return [];
+  const tokens = raw
+    .split(/[\s,，;；、]+/)
+    .map((part) => part.trim())
+    .map((part) => part.replace(/^siyuan:\/\/blocks\//i, '').replace(/[/?#].*$/, '').trim())
+    .filter((part) => part.length > 0);
+  return Array.from(new Set(tokens));
+}

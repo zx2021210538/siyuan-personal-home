@@ -32,6 +32,7 @@ export interface PluginSettings {
   followEditorFont: boolean;
   hideDailyNotesInRecent: boolean;
   hiddenRecentNotebookIds?: string[];
+  hiddenRecentIds?: string[];
   recentTab: RecentTabKey;
   recentViewMode?: 'list' | 'grid';
   previewLines?: number;
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   followEditorFont: true,
   hideDailyNotesInRecent: false,
   hiddenRecentNotebookIds: [],
+  hiddenRecentIds: [],
   recentTab: 'modified',
   recentViewMode: 'list',
   previewLines: 2,

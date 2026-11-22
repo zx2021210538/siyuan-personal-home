@@ -50,4 +50,12 @@ describe('CSS isolation (no global Tailwind Preflight leak & unlayered SiYuan ho
     expect(out.indexOf('.sph-root p')).toBeLessThan(out.indexOf('.sph-root .sph-notes-split'));
     expect(out.indexOf('.sph-root .sph-notes-split')).toBeLessThan(out.indexOf('.sph-root .flex'));
   });
+
+  it('keeps sticky nav bar z-index strictly below SiYuan menus and toolbars', () => {
+    const cssPath = path.resolve(__dirname, '../../src/styles/index.css');
+    const content = fs.readFileSync(cssPath, 'utf8');
+    const match = content.match(/\.sph-nav-bar\s*\{[^}]*z-index:\s*(\d+)/);
+    expect(match).not.toBeNull();
+    expect(Number(match?.[1])).toBeLessThanOrEqual(5);
+  });
 });

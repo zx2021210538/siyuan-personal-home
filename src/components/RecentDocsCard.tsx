@@ -29,7 +29,9 @@ export interface RecentDocsCardProps {
   hideDailyNotes?: boolean;
   onToggleHideDailyNotes?: () => void;
   hiddenNotebookIds?: string[];
+  hiddenIdsCount?: number;
   onToggleHiddenNotebook?: (nbId: string) => void;
+  onOpenHiddenIdsSettings?: () => void;
   diaryNotebookId?: string;
   notebookId: string;
   notebooks: SiYuanNotebook[];
@@ -61,7 +63,9 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
   hideDailyNotes = false,
   onToggleHideDailyNotes,
   hiddenNotebookIds = [],
+  hiddenIdsCount = 0,
   onToggleHiddenNotebook,
+  onOpenHiddenIdsSettings,
   diaryNotebookId = '',
   notebookId,
   notebooks,
@@ -453,9 +457,9 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
               <span className="text-[11px] font-medium" style={{ color: 'var(--sph-subtle)' }}>
                 笔记本
               </span>
-              {hiddenSet.size > 0 && (
+              {(hiddenSet.size + hiddenIdsCount) > 0 && (
                 <span className="text-[10.5px] sph-num-font" style={{ color: 'var(--sph-subtle)' }}>
-                  已隐藏 {hiddenSet.size}
+                  已屏蔽 {hiddenSet.size + hiddenIdsCount}
                 </span>
               )}
             </div>
@@ -527,28 +531,47 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
             })}
           </div>
 
-          {onToggleHiddenNotebook && diaryNb && (
-            <div className="pt-3 px-2.5 flex flex-col gap-2" style={{ borderTop: '1px solid var(--sph-hairline)' }}>
-              <label
-                className="flex items-center justify-between gap-2 text-xs cursor-pointer select-none"
-                style={{ color: 'var(--sph-muted)' }}
-                title={`将当前日记本「${diaryNb.name}」从全部近期笔记与总览中整体隐藏（含年/月父文档）`}
-              >
-                <span className="truncate">隐藏日记本</span>
-                <span className="sph-switch">
-                  <input
-                    type="checkbox"
-                    aria-label="隐藏日记本"
-                    checked={diaryIsHidden}
-                    onChange={() => onToggleHiddenNotebook(diaryNb.id)}
-                  />
-                  <span className="sph-switch-track">
-                    <span className="sph-switch-thumb" />
+          {(onToggleHiddenNotebook || onOpenHiddenIdsSettings) && (
+            <div className="pt-3 px-2.5 flex flex-col gap-2.5" style={{ borderTop: '1px solid var(--sph-hairline)' }}>
+              {onToggleHiddenNotebook && diaryNb && (
+                <label
+                  className="flex items-center justify-between gap-2 text-xs cursor-pointer select-none"
+                  style={{ color: 'var(--sph-muted)' }}
+                  title={`将当前日记本「${diaryNb.name}」从全部近期笔记与总览中整体隐藏（含年/月父文档）`}
+                >
+                  <span className="truncate">隐藏日记本</span>
+                  <span className="sph-switch">
+                    <input
+                      type="checkbox"
+                      aria-label="隐藏日记本"
+                      checked={diaryIsHidden}
+                      onChange={() => onToggleHiddenNotebook(diaryNb.id)}
+                    />
+                    <span className="sph-switch-track">
+                      <span className="sph-switch-thumb" />
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+              )}
+              {onOpenHiddenIdsSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenHiddenIdsSettings}
+                  className="sph-btn w-full py-1.5 text-xs justify-between px-2.5"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <EyeOff size={12} />
+                    <span>按 ID 屏蔽管理</span>
+                  </span>
+                  {hiddenIdsCount > 0 && (
+                    <span className="sph-num-font text-[11px]" style={{ color: 'var(--sph-accent)' }}>
+                      {hiddenIdsCount}
+                    </span>
+                  )}
+                </button>
+              )}
               <p className="text-[11px] leading-relaxed" style={{ color: 'var(--sph-subtle)' }}>
-                点击右侧小眼睛可隐藏任意指定笔记本；左侧点选笔记本仍可随时查看。
+                支持按笔记本或父文档 ID 屏蔽其下全部子文档。
               </p>
             </div>
           )}
@@ -611,7 +634,7 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
                   <div
                     role="dialog"
                     aria-label="笔记卡片外观设置"
-                    className="sph-popover absolute right-0 top-full mt-2 w-72 p-4 z-40 flex flex-col gap-3.5"
+                    className="sph-popover absolute right-0 top-full mt-2 w-72 p-4 z-[3] flex flex-col gap-3.5"
                   >
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between text-xs">

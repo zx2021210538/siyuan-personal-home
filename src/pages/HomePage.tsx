@@ -47,7 +47,11 @@ import {
   openOrCreateDailyNote,
   resolveActiveDiaryNotebook,
 } from '../services/dailyNoteService';
-import { fetchRecentModifiedDocs, fetchRecentReadDocs } from '../services/recentDocsService';
+import {
+  fetchRecentModifiedDocs,
+  fetchRecentReadDocs,
+  resolveHiddenIdLabels,
+} from '../services/recentDocsService';
 import {
   getRuntimeEditorFontFamily,
   type SiYuanClient,
@@ -177,8 +181,9 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const [activeHabitId, setActiveHabitId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  const [hiddenIdLabels, setHiddenIdLabels] = useState<Record<string, string>>({});
   const [docPickerTarget, setDocPickerTarget] = useState<
-    { kind: 'task'; id: string } | { kind: 'habit'; id: string } | null
+    { kind: 'task'; id: string } | { kind: 'habit'; id: string } | { kind: 'hiddenDoc' } | null
   >(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -308,6 +313,7 @@ export const HomePage: React.FC<HomePageProps> = ({
       reads: RecentReadsStore,
       hideDaily: boolean,
       hiddenNbIds: string[],
+      hiddenIds: string[],
       nbFilter: string,
       kw: string,
       offset: number,
@@ -320,6 +326,7 @@ export const HomePage: React.FC<HomePageProps> = ({
           notebookId: nbFilter,
           hideDailyNotes: hideDaily,
           hiddenNotebookIds: hiddenNbIds,
+          hiddenIds,
           keyword: kw,
           limit: PAGE_SIZE,
           offset,
@@ -389,11 +396,13 @@ export const HomePage: React.FC<HomePageProps> = ({
           loadedReads,
           loadedSettings.hideDailyNotesInRecent,
           loadedSettings.hiddenRecentNotebookIds ?? [],
+          loadedSettings.hiddenRecentIds ?? [],
           recentNotebookId,
           recentKeyword,
           0,
           false,
         ),
+        resolveHiddenIdLabels(api, nbs, loadedSettings.hiddenRecentIds ?? []).then(setHiddenIdLabels),
       ]);
     } catch (err) {
       reportError(err, '加载个人主页数据时发生错误');
@@ -558,6 +567,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         latestReads,
         settings.hideDailyNotesInRecent,
         settings.hiddenRecentNotebookIds ?? [],
+        settings.hiddenRecentIds ?? [],
         recentNotebookId,
         recentKeyword,
         0,
@@ -576,6 +586,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         recentReadsStore,
         nextVal,
         settings.hiddenRecentNotebookIds ?? [],
+        settings.hiddenRecentIds ?? [],
         recentNotebookId,
         recentKeyword,
         0,
@@ -596,12 +607,55 @@ export const HomePage: React.FC<HomePageProps> = ({
         recentReadsStore,
         settings.hideDailyNotesInRecent,
         nextIds,
+        settings.hiddenRecentIds ?? [],
         recentNotebookId,
         recentKeyword,
         0,
         false,
       );
     }, '更新隐藏笔记本设置失败');
+  };
+
+  const handleAddHiddenIds = async (incoming: string[]) => {
+    await safeRun(async () => {
+      const curr = settings.hiddenRecentIds ?? [];
+      const merged = Array.from(new Set([...curr, ...incoming.map((x) => x.trim()).filter(Boolean)]));
+      await handlePatchSettings({ hiddenRecentIds: merged });
+      const labels = await resolveHiddenIdLabels(api, notebooks, merged);
+      setHiddenIdLabels(labels);
+      await loadRecentDocs(
+        recentTab,
+        notebooks,
+        recentReadsStore,
+        settings.hideDailyNotesInRecent,
+        settings.hiddenRecentNotebookIds ?? [],
+        merged,
+        recentNotebookId,
+        recentKeyword,
+        0,
+        false,
+      );
+    }, '添加隐藏 ID 失败');
+  };
+
+  const handleRemoveHiddenId = async (targetId: string) => {
+    await safeRun(async () => {
+      const curr = settings.hiddenRecentIds ?? [];
+      const nextIds = curr.filter((id) => id !== targetId);
+      await handlePatchSettings({ hiddenRecentIds: nextIds });
+      await loadRecentDocs(
+        recentTab,
+        notebooks,
+        recentReadsStore,
+        settings.hideDailyNotesInRecent,
+        settings.hiddenRecentNotebookIds ?? [],
+        nextIds,
+        recentNotebookId,
+        recentKeyword,
+        0,
+        false,
+      );
+    }, '移除隐藏 ID 失败');
   };
 
   const handleChangeRecentNotebook = async (nbId: string) => {
@@ -613,6 +667,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         recentReadsStore,
         settings.hideDailyNotesInRecent,
         settings.hiddenRecentNotebookIds ?? [],
+        settings.hiddenRecentIds ?? [],
         nbId,
         recentKeyword,
         0,
@@ -633,6 +688,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             recentReadsStore,
             settings.hideDailyNotesInRecent,
             settings.hiddenRecentNotebookIds ?? [],
+            settings.hiddenRecentIds ?? [],
             recentNotebookId,
             kw,
             0,
@@ -656,6 +712,7 @@ export const HomePage: React.FC<HomePageProps> = ({
           recentReadsStore,
           settings.hideDailyNotesInRecent,
           settings.hiddenRecentNotebookIds ?? [],
+          settings.hiddenRecentIds ?? [],
           recentNotebookId,
           kw,
           0,
@@ -1333,7 +1390,9 @@ export const HomePage: React.FC<HomePageProps> = ({
               hideDailyNotes={settings.hideDailyNotesInRecent}
               onToggleHideDailyNotes={() => void handleToggleHideDailyNotes()}
               hiddenNotebookIds={settings.hiddenRecentNotebookIds ?? []}
+              hiddenIdsCount={(settings.hiddenRecentIds ?? []).length}
               onToggleHiddenNotebook={(nbId) => void handleToggleHiddenNotebook(nbId)}
+              onOpenHiddenIdsSettings={() => setSettingsOpen(true)}
               diaryNotebookId={activeDiaryNotebookId}
               notebookId={recentNotebookId}
               notebooks={notebooks}
@@ -1347,6 +1406,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   recentReadsStore,
                   settings.hideDailyNotesInRecent,
                   settings.hiddenRecentNotebookIds ?? [],
+                  settings.hiddenRecentIds ?? [],
                   recentNotebookId,
                   recentKeyword,
                   recentOffset + PAGE_SIZE,
@@ -1483,6 +1543,11 @@ export const HomePage: React.FC<HomePageProps> = ({
 
       <DocPickerModal
         open={Boolean(docPickerTarget)}
+        title={
+          docPickerTarget?.kind === 'hiddenDoc'
+            ? '选择要屏蔽的父文档（含其下全部子文档）'
+            : '关联思源笔记'
+        }
         onClose={() => setDocPickerTarget(null)}
         onSearch={(kw) => api.searchDocs(kw)}
         onSelect={(doc) => {
@@ -1492,11 +1557,14 @@ export const HomePage: React.FC<HomePageProps> = ({
               linkedDocId: doc.id,
               linkedDocTitle: doc.title,
             });
-          } else {
+          } else if (docPickerTarget.kind === 'habit') {
             void handleUpdateHabit(docPickerTarget.id, {
               linkedDocId: doc.id,
               linkedDocTitle: doc.title,
             });
+          } else if (docPickerTarget.kind === 'hiddenDoc') {
+            setHiddenIdLabels((prev) => ({ ...prev, [doc.id]: doc.title }));
+            void handleAddHiddenIds([doc.id]);
           }
         }}
       />
@@ -1506,9 +1574,14 @@ export const HomePage: React.FC<HomePageProps> = ({
         settings={settings}
         notebooks={notebooks}
         diaryNotebookId={activeDiaryNotebookId}
+        hiddenIdLabels={hiddenIdLabels}
+        disableEscape={Boolean(docPickerTarget)}
         onClose={() => setSettingsOpen(false)}
         onChangeSettings={(patch) => void handlePatchSettings(patch)}
         onToggleHiddenNotebook={(nbId) => void handleToggleHiddenNotebook(nbId)}
+        onAddHiddenIds={(ids) => void handleAddHiddenIds(ids)}
+        onRemoveHiddenId={(id) => void handleRemoveHiddenId(id)}
+        onPickHiddenDoc={() => setDocPickerTarget({ kind: 'hiddenDoc' })}
         onExportJson={handleExportJson}
         onImportJson={handleImportJson}
       />

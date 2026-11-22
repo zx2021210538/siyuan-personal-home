@@ -5,6 +5,7 @@ import {
   extractTitleImageUrl,
   formatRelativeTime,
   groupDocsByDateBucket,
+  parseHiddenIdInput,
   parseIalAttrs,
   parseTags,
 } from '../../src/domain/docPreview';
@@ -100,6 +101,18 @@ describe('docPreview', () => {
       ['近 30 天', ['4']],
       ['2026 年 9 月', ['5']],
       ['更早', ['6']],
+    ]);
+  });
+
+  it('parses multiple hidden IDs from commas, whitespace, and siyuan://blocks links', () => {
+    expect(
+      parseHiddenIdInput(
+        ' 20250101120000-abc1234, siyuan://blocks/20250202120000-def5678\n20250101120000-abc1234，20250303120000-ghi9012 ',
+      ),
+    ).toEqual([
+      '20250101120000-abc1234',
+      '20250202120000-def5678',
+      '20250303120000-ghi9012',
     ]);
   });
 });

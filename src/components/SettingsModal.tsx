@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, EyeOff, Upload, X } from 'lucide-react';
+import { Download, EyeOff, FolderSearch, Plus, Upload, X } from 'lucide-react';
+import { parseHiddenIdInput } from '../domain/docPreview';
 import { validateBackupBundle } from '../domain/storeMerge';
 import type { PluginSettings, TopBarPosition, WeekStartDay } from '../domain/types';
 import type { SiYuanNotebook } from '../services/siyuanApi';
@@ -9,9 +10,14 @@ export interface SettingsModalProps {
   settings: PluginSettings;
   notebooks?: SiYuanNotebook[];
   diaryNotebookId?: string;
+  hiddenIdLabels?: Record<string, string>;
+  disableEscape?: boolean;
   onClose: () => void;
   onChangeSettings: (patch: Partial<PluginSettings>) => void;
   onToggleHiddenNotebook?: (nbId: string) => void;
+  onAddHiddenIds?: (ids: string[]) => void;
+  onRemoveHiddenId?: (id: string) => void;
+  onPickHiddenDoc?: () => void;
   onExportJson: () => Promise<void>;
   onImportJson: (raw: unknown) => Promise<void>;
 }
@@ -23,24 +29,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   notebooks = [],
   diaryNotebookId = '',
+  hiddenIdLabels = {},
+  disableEscape = false,
   onClose,
   onChangeSettings,
   onToggleHiddenNotebook,
+  onAddHiddenIds,
+  onRemoveHiddenId,
+  onPickHiddenDoc,
   onExportJson,
   onImportJson,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [hiddenIdDraft, setHiddenIdDraft] = useState('');
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || disableEscape) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  }, [open, disableEscape, onClose]);
+
+  const handleSubmitHiddenIds = () => {
+    const parsed = parseHiddenIdInput(hiddenIdDraft);
+    if (parsed.length === 0) return;
+    onAddHiddenIds?.(parsed);
+    setHiddenIdDraft('');
+  };
 
   if (!open) return null;
 
@@ -232,53 +251,135 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {notebooks.filter((nb) => !nb.closed).length > 0 && onToggleHiddenNotebook && (
+          {(notebooks.filter((nb) => !nb.closed).length > 0 || onAddHiddenIds) && (
             <div
-              className="pt-3.5 flex flex-col gap-2"
+              className="pt-3.5 flex flex-col gap-2.5"
               style={{ borderTop: '1px solid var(--sph-border)' }}
             >
               <div>
-                <div className="font-medium">在近期笔记中隐藏指定笔记本</div>
-                <div className="text-[11px] mt-0.5" style={{ color: 'var(--sph-subtle)' }}>
-                  勾选后，该笔记本内的全部文档（含日记及年/月父文档）不会出现在「总览」与「全部笔记本」中
+                <div className="font-medium">屏蔽指定笔记本 / 父文档 ID</div>
+                <div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: 'var(--sph-subtle)' }}>
+                  可一键隐藏顶层大笔记本，或输入/选择任意父文档 ID（同时隐藏该文档及其所有子文档，支持一次粘贴多个 ID）
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1.5 pt-0.5">
-                {notebooks
-                  .filter((nb) => !nb.closed)
-                  .map((nb) => {
-                    const isHidden = (settings.hiddenRecentNotebookIds ?? []).includes(nb.id);
-                    const isDiary = nb.id === diaryNotebookId;
-                    return (
+
+              {notebooks.filter((nb) => !nb.closed).length > 0 && onToggleHiddenNotebook && (
+                <div className="flex flex-wrap gap-1.5">
+                  {notebooks
+                    .filter((nb) => !nb.closed)
+                    .map((nb) => {
+                      const isHidden = (settings.hiddenRecentNotebookIds ?? []).includes(nb.id);
+                      const isDiary = nb.id === diaryNotebookId;
+                      return (
+                        <button
+                          key={nb.id}
+                          type="button"
+                          aria-pressed={isHidden}
+                          onClick={() => onToggleHiddenNotebook(nb.id)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors"
+                          style={{
+                            backgroundColor: isHidden ? 'var(--sph-accent-soft)' : 'var(--sph-wash)',
+                            color: isHidden ? 'var(--sph-accent)' : 'var(--sph-muted)',
+                            border: `1px solid ${isHidden ? 'var(--sph-accent-border)' : 'var(--sph-hairline)'}`,
+                          }}
+                        >
+                          {isHidden && <EyeOff size={11} />}
+                          <span>{nb.name}</span>
+                          {isDiary && (
+                            <span
+                              className="text-[10px] px-1 rounded"
+                              style={{
+                                backgroundColor: 'var(--sph-card)',
+                                color: 'var(--sph-subtle)',
+                              }}
+                            >
+                              日记本
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+
+              {onAddHiddenIds && (
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      aria-label="输入要隐藏的笔记本或文档 ID"
+                      placeholder="粘贴 1 个或多个 ID（逗号/空格分隔）"
+                      value={hiddenIdDraft}
+                      onChange={(e) => setHiddenIdDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSubmitHiddenIds();
+                        }
+                      }}
+                      className="sph-input flex-1 min-w-0 py-1.5 px-2.5 text-xs"
+                    />
+                    <button
+                      type="button"
+                      className="sph-btn px-2.5 py-1.5 text-xs shrink-0"
+                      disabled={!hiddenIdDraft.trim()}
+                      onClick={handleSubmitHiddenIds}
+                    >
+                      <Plus size={12} />
+                      <span>添加</span>
+                    </button>
+                    {onPickHiddenDoc && (
                       <button
-                        key={nb.id}
                         type="button"
-                        aria-pressed={isHidden}
-                        onClick={() => onToggleHiddenNotebook(nb.id)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors"
-                        style={{
-                          backgroundColor: isHidden ? 'var(--sph-accent-soft)' : 'var(--sph-wash)',
-                          color: isHidden ? 'var(--sph-accent)' : 'var(--sph-muted)',
-                          border: `1px solid ${isHidden ? 'var(--sph-accent-border)' : 'var(--sph-hairline)'}`,
-                        }}
+                        className="sph-btn px-2.5 py-1.5 text-xs shrink-0"
+                        title="搜索并选择要隐藏的父文档（连同子文档一起屏蔽）"
+                        onClick={onPickHiddenDoc}
                       >
-                        {isHidden && <EyeOff size={11} />}
-                        <span>{nb.name}</span>
-                        {isDiary && (
+                        <FolderSearch size={12} />
+                        <span>选文档</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {(settings.hiddenRecentIds ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(settings.hiddenRecentIds ?? []).map((hid) => {
+                        const resolved = hiddenIdLabels[hid];
+                        return (
                           <span
-                            className="text-[10px] px-1 rounded"
+                            key={hid}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11.5px] max-w-full"
                             style={{
-                              backgroundColor: 'var(--sph-card)',
-                              color: 'var(--sph-subtle)',
+                              backgroundColor: 'var(--sph-wash)',
+                              border: '1px solid var(--sph-hairline)',
+                              color: 'var(--sph-text)',
                             }}
                           >
-                            日记本
+                            <EyeOff size={11} style={{ color: 'var(--sph-accent)' }} className="shrink-0" />
+                            <span className="truncate">
+                              {resolved ? `${resolved} · ` : ''}
+                              <span className="sph-num-font" style={{ color: 'var(--sph-muted)' }}>
+                                {hid}
+                              </span>
+                            </span>
+                            {onRemoveHiddenId && (
+                              <button
+                                type="button"
+                                aria-label={`移除隐藏 ID ${hid}`}
+                                onClick={() => onRemoveHiddenId(hid)}
+                                className="p-0.5 rounded shrink-0"
+                                style={{ color: 'var(--sph-subtle)' }}
+                              >
+                                <X size={11} />
+                              </button>
+                            )}
                           </span>
-                        )}
-                      </button>
-                    );
-                  })}
-              </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
