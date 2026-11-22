@@ -1,0 +1,20 @@
+{
+  "name": "siyuan-personal-home",
+  "author": "Personal",
+  "url": "",
+  "version": "0.1.0",
+  "minAppVersion": "3.8.11",
+  "backends": ["all"],
+  "frontends": ["all"],
+  "disabledInPublish": true,
+  "displayName": {
+    "default": "Personal Home",
+    "zh-CN": "个人主页"
+  },
+  "description": {
+    "default": "A clean personal home dashboard with note stats, heatmap, daily note calendar, recent docs, habit tracker, and lightweight tasks.",
+    "zh-CN": "清爽克制的思源个人主页：集笔记统计与热力图、日记月历与今日日记卡片、最近读写预览、双维度习惯打卡和轻量无时间节点任务于一体。"
+  },
+  "icon": "icon.png",
+  "keywords": ["home", "dashboard", "calendar", "habit", "task", "个人主页", "习惯打卡", "日历"]
+}
