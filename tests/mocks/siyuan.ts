@@ -1,10 +1,12 @@
 export class Plugin {
+  name = 'siyuan-personal-home';
   app: unknown = {};
   eventBus = {
     on: () => undefined,
     off: () => undefined,
   };
   i18n: Record<string, string> = {};
+  addIcons(_svg: string): void {}
   addTopBar(_options: unknown): HTMLElement {
     return document.createElement('div');
   }
