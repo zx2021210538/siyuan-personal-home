@@ -27,7 +27,7 @@ export default class PersonalHomePlugin extends Plugin {
   private readTracker: RecentReadTracker | null = null;
   private cachedSettings: PluginSettings = { ...DEFAULT_SETTINGS };
   private activeTabCtx: CustomTabContext | null = null;
-  private activeRoot: Root | null = null;
+  private mountedRoots = new Map<CustomTabContext, Root>();
   private syncListeners = new Set<() => void>();
 
   private readonly handleSwitchProtyle = (event: unknown): void => {
@@ -87,7 +87,7 @@ export default class PersonalHomePlugin extends Plugin {
         ctx.element.appendChild(container);
 
         const root = createRoot(container);
-        plugin.activeRoot = root;
+        plugin.mountedRoots.set(ctx, root);
         root.render(
           React.createElement(HomePage, {
             api,
@@ -108,11 +108,15 @@ export default class PersonalHomePlugin extends Plugin {
         );
       },
       destroy() {
-        if (plugin.activeRoot) {
-          plugin.activeRoot.unmount();
-          plugin.activeRoot = null;
+        const ctx = this as unknown as CustomTabContext;
+        const root = plugin.mountedRoots.get(ctx);
+        if (root) {
+          root.unmount();
+          plugin.mountedRoots.delete(ctx);
         }
-        plugin.activeTabCtx = null;
+        if (plugin.activeTabCtx === ctx) {
+          plugin.activeTabCtx = null;
+        }
       },
     });
 
@@ -158,7 +162,9 @@ export default class PersonalHomePlugin extends Plugin {
   openHomeTab(): void {
     const head = this.activeTabCtx?.tab?.headElement;
     const switchTab = this.activeTabCtx?.tab?.parent?.switchTab;
-    if (head && typeof switchTab === 'function') {
+    const isDetachedInBrowser =
+      head && typeof document !== 'undefined' && document.body.children.length > 0 && !head.isConnected;
+    if (head && typeof switchTab === 'function' && !isDetachedInBrowser) {
       switchTab.call(this.activeTabCtx?.tab?.parent, head);
       return;
     }
@@ -180,10 +186,10 @@ export default class PersonalHomePlugin extends Plugin {
     this.readTracker?.dispose();
     this.readTracker = null;
     this.syncListeners.clear();
-    if (this.activeRoot) {
-      this.activeRoot.unmount();
-      this.activeRoot = null;
+    for (const root of this.mountedRoots.values()) {
+      root.unmount();
     }
+    this.mountedRoots.clear();
     this.activeTabCtx = null;
   }
 }

@@ -80,6 +80,10 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   };
 
   const commitDurationEdit = (habitId: string) => {
+    if (durationDraft.trim() === '') {
+      setEditingDurationId(null);
+      return;
+    }
     const parsed = Number(durationDraft);
     if (Number.isFinite(parsed) && parsed >= 0) {
       onUpdateTodayDuration(habitId, Math.round(parsed));
@@ -326,7 +330,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                           onChange={(e) => setDurationDraft(e.target.value)}
                           onBlur={() => commitDurationEdit(habit.id)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') commitDurationEdit(habit.id);
+                            if (e.key === 'Enter' && !e.nativeEvent.isComposing) commitDurationEdit(habit.id);
                             if (e.key === 'Escape') setEditingDurationId(null);
                           }}
                           className="sph-input !py-0 !px-1.5 w-14 !text-[11px]"

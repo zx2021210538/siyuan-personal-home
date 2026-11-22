@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   ArrowDown,
@@ -69,6 +69,24 @@ export const HabitDetailModal: React.FC<HabitDetailModalProps> = ({
     habit.defaultDurationMinutes ?? 30,
   );
 
+  useEffect(() => {
+    if (editing) return;
+    setName(habit.name);
+    setIcon(habit.icon);
+    setFrequencyType(habit.frequencyType);
+    setWeeklyTarget(habit.weeklyTarget);
+    setTrackDuration(habit.trackDuration);
+    setDefaultDurationMinutes(habit.defaultDurationMinutes ?? 30);
+  }, [habit, editing]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   const stats = useMemo(
     () => computeHabitStats(habit, checkins, todayStr, weekStartDay),
     [habit, checkins, todayStr, weekStartDay],
@@ -102,19 +120,20 @@ export const HabitDetailModal: React.FC<HabitDetailModalProps> = ({
   const handleSelectDate = (dateStr: string) => {
     if (dateStr > todayStr) return;
     const existing = checkins[dateStr];
-    const nextDone = !existing?.done;
-    onSetDateCheckin(habit.id, dateStr, {
-      done: nextDone,
-      durationMinutes: nextDone
-        ? existing?.durationMinutes ?? (habit.trackDuration ? habit.defaultDurationMinutes ?? 30 : undefined)
-        : undefined,
-      note: existing?.note,
-    });
     setSelectedDate(dateStr);
-    setNoteDraft(existing?.note ?? '');
-    setDurDraft(
-      String(existing?.durationMinutes ?? habit.defaultDurationMinutes ?? 30),
-    );
+    if (!existing?.done) {
+      const defDur = habit.trackDuration ? habit.defaultDurationMinutes ?? 30 : undefined;
+      onSetDateCheckin(habit.id, dateStr, {
+        done: true,
+        durationMinutes: defDur,
+        note: existing?.note,
+      });
+      setNoteDraft(existing?.note ?? '');
+      setDurDraft(String(defDur ?? 30));
+    } else {
+      setNoteDraft(existing.note ?? '');
+      setDurDraft(String(existing.durationMinutes ?? habit.defaultDurationMinutes ?? 30));
+    }
   };
 
   const saveEdit = (e: React.FormEvent) => {
@@ -139,7 +158,7 @@ export const HabitDetailModal: React.FC<HabitDetailModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
       onClick={onClose}
     >
@@ -298,7 +317,7 @@ export const HabitDetailModal: React.FC<HabitDetailModalProps> = ({
 
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium">月度打卡记录（点击日期可补卡或取消）</span>
+            <span className="text-xs font-medium">月度打卡记录（点空白日补卡，点已打日编辑或取消）</span>
             <div className="flex items-center gap-1">
               <button type="button" className="sph-btn !p-1" onClick={() => shiftMonth(-1)}>
                 <ChevronLeft size={13} />
@@ -381,6 +400,21 @@ export const HabitDetailModal: React.FC<HabitDetailModalProps> = ({
                 }}
               >
                 更新当日
+              </button>
+              <button
+                type="button"
+                className="sph-btn !py-0.5"
+                style={{ color: '#ef4444' }}
+                onClick={() => {
+                  onSetDateCheckin(habit.id, selectedDate, {
+                    done: false,
+                    durationMinutes: undefined,
+                    note: selectedEntry.note,
+                  });
+                  setSelectedDate(null);
+                }}
+              >
+                取消打卡
               </button>
             </div>
           )}

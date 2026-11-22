@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { escapeSqlString, type SiYuanClient, type SiYuanNotebook } from '../../src/services/siyuanApi';
+import {
+  escapeSqlLike,
+  escapeSqlString,
+  type SiYuanClient,
+  type SiYuanNotebook,
+} from '../../src/services/siyuanApi';
 import { fetchOverviewStats, fetchYearHeatmap } from '../../src/services/statsService';
 import {
   fetchMonthCalendarDays,
@@ -30,8 +35,9 @@ function createMockApi(overrides: Partial<SiYuanClient> = {}): SiYuanClient {
 }
 
 describe('siyuanApi + statsService + dailyNoteService', () => {
-  it('escapes SQL single quotes safely', () => {
+  it('escapes SQL single quotes and LIKE wildcards safely', () => {
     expect(escapeSqlString("O'Reilly's Note")).toBe("O''Reilly''s Note");
+    expect(escapeSqlLike("100%_a\\b'c")).toBe("100\\%\\_a\\\\b''c");
   });
 
   it('resolves active diary notebook with priority local-dailynoteid > saved > first open > empty', () => {

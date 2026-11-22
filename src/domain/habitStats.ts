@@ -116,7 +116,7 @@ export function computeHabitStats(
   let totalDurationMinutes = 0;
 
   for (const [date, entry] of Object.entries(checkins)) {
-    if (!entry?.done) continue;
+    if (!entry?.done || date > todayStr) continue;
     const dur = Math.max(0, entry.durationMinutes ?? 0);
     totalDurationMinutes += dur;
     if (date >= weekStart && date <= weekEnd) {

@@ -77,10 +77,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   const [managingCats, setManagingCats] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const [catNameDrafts, setCatNameDrafts] = useState<Record<string, string>>({});
 
+  const validCatIds = useMemo(() => new Set(validCategories.map((c) => c.id)), [validCategories]);
   const effectiveNewCategoryId =
-    newCategoryId ||
-    (filterCat !== 'all' ? filterCat : validCategories[0]?.id ?? 'cat-work');
+    (newCategoryId && validCatIds.has(newCategoryId) ? newCategoryId : '') ||
+    (filterCat !== 'all' && validCatIds.has(filterCat) ? filterCat : '') ||
+    validCategories[0]?.id ||
+    'cat-work';
 
   const activeTasks = useMemo(
     () => sortTasksByPriority(getActiveTasks(tasks, filterCat)),
@@ -110,7 +114,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   const renderTaskRow = (task: TaskItem) => {
     const pMeta = PRIORITY_META[task.priority];
-    const cat = categoryMap.get(task.categoryId);
+    const cat = categoryMap.get(task.categoryId) ?? validCategories[0];
     const isEditing = editingTaskId === task.id;
 
     return (
@@ -160,7 +164,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               setEditingTaskId(null);
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                 const trimmed = editingTitle.trim();
                 if (trimmed && trimmed !== task.title) {
                   onUpdateTask(task.id, { title: trimmed });
@@ -271,6 +275,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       categories.map((c) => (c.id === id ? { ...c, deleted: true, updatedAt: now } : c)),
     );
     if (filterCat === id) setFilterCat('all');
+    if (newCategoryId === id) setNewCategoryId('');
+  };
+
+  const commitCatRename = (cat: TaskCategory) => {
+    const draft = catNameDrafts[cat.id];
+    setCatNameDrafts((prev) => {
+      const next = { ...prev };
+      delete next[cat.id];
+      return next;
+    });
+    if (draft === undefined) return;
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === cat.name) return;
+    const now = Date.now();
+    onSaveCategories(
+      categories.map((c) => (c.id === cat.id ? { ...c, name: trimmed, updatedAt: now } : c)),
+    );
   };
 
   return (
@@ -324,7 +345,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') handleAddTask();
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAddTask();
           }}
           className="sph-input flex-1 min-w-0 !py-1.5 !text-xs"
         />
@@ -412,14 +433,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <div key={cat.id} className="flex items-center gap-1.5">
                 <input
                   type="text"
-                  value={cat.name}
-                  onChange={(e) => {
-                    const now = Date.now();
-                    onSaveCategories(
-                      categories.map((c) =>
-                        c.id === cat.id ? { ...c, name: e.target.value, updatedAt: now } : c,
-                      ),
-                    );
+                  aria-label={`重命名维度 ${cat.name}`}
+                  value={catNameDrafts[cat.id] ?? cat.name}
+                  onChange={(e) =>
+                    setCatNameDrafts((prev) => ({ ...prev, [cat.id]: e.target.value }))
+                  }
+                  onBlur={() => commitCatRename(cat)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      commitCatRename(cat);
+                    }
+                    if (e.key === 'Escape') {
+                      setCatNameDrafts((prev) => {
+                        const next = { ...prev };
+                        delete next[cat.id];
+                        return next;
+                      });
+                    }
                   }}
                   className="sph-input flex-1 !py-0.5 !text-xs"
                 />
@@ -457,7 +487,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddCategory();
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAddCategory();
               }}
               className="sph-input flex-1 !py-1 !text-xs"
             />

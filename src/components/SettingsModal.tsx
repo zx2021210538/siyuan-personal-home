@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Download, Upload, X } from 'lucide-react';
+import { validateBackupBundle } from '../domain/storeMerge';
 import type { PluginSettings, TopBarPosition, WeekStartDay } from '../domain/types';
 
 export interface SettingsModalProps {
@@ -22,6 +23,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -46,12 +56,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
+      // Validate backup schema BEFORE prompting overwrite confirmation
+      const validated = validateBackupBundle(parsed);
       const confirmed =
         typeof window.confirm === 'function'
           ? window.confirm('导入将覆盖当前的个人主页设置、轻量任务、习惯打卡与最近阅读记录，确定继续吗？')
           : true;
       if (!confirmed) return;
-      await onImportJson(parsed);
+      await onImportJson(validated);
       setStatusMsg('备份恢复成功，数据已刷新');
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : '备份文件解析失败');
@@ -60,7 +72,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
       onClick={onClose}
     >

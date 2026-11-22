@@ -152,4 +152,16 @@ describe('habitStats', () => {
     expect(formatDurationMinutes(90)).toBe('1h 30m');
     expect(formatDurationMinutes(120)).toBe('2h');
   });
+
+  it('ignores future-dated checkin entries when computing weekly counts and total duration', () => {
+    const habit = makeHabit({ trackDuration: true, createdAt: '2026-11-16' });
+    const checkins: Record<string, HabitCheckin> = {
+      '2026-11-19': makeCheckin(true, 30),
+      '2026-11-21': makeCheckin(true, 60), // future relative to today 2026-11-19
+    };
+    const stats = computeHabitStats(habit, checkins, '2026-11-19', 1);
+    expect(stats.thisWeekCount).toBe(1);
+    expect(stats.thisWeekDurationMinutes).toBe(30);
+    expect(stats.totalDurationMinutes).toBe(30);
+  });
 });

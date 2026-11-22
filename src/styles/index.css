@@ -65,9 +65,36 @@
   align-items: start;
 }
 
+.sph-bento-col-left,
+.sph-bento-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
 @media (max-width: 960px) {
   .sph-bento-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .sph-bento-col-left,
+  .sph-bento-col-right {
+    display: contents;
+  }
+  .sph-order-today {
+    order: 1;
+  }
+  .sph-order-habits {
+    order: 2;
+  }
+  .sph-order-tasks {
+    order: 3;
+  }
+  .sph-order-calendar {
+    order: 4;
+  }
+  .sph-order-recent {
+    order: 5;
   }
 }
 

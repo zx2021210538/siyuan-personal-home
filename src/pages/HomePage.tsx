@@ -731,7 +731,7 @@ export const HomePage: React.FC<HomePageProps> = ({
     a.href = url;
     a.download = `siyuan-personal-home-backup-${todayStr}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleImportJson = async (raw: unknown) => {
@@ -822,86 +822,96 @@ export const HomePage: React.FC<HomePageProps> = ({
         />
 
         <div className="sph-bento-grid">
-          <div className="flex flex-col gap-4 min-w-0">
-            <TodayDailyNoteCard
-              todayStr={todayStr}
-              dailyNote={todayDailyNote}
-              loading={todayLoading}
-              onOpenDoc={openDoc}
-              onCreateToday={() => void handleClickDiaryDate(todayStr)}
-            />
+          <div className="sph-bento-col-left">
+            <div className="sph-order-today">
+              <TodayDailyNoteCard
+                todayStr={todayStr}
+                dailyNote={todayDailyNote}
+                loading={todayLoading}
+                onOpenDoc={openDoc}
+                onCreateToday={() => void handleClickDiaryDate(todayStr)}
+              />
+            </div>
 
-            <RecentDocsCard
-              activeTab={recentTab}
-              onChangeTab={(tab) => void handleChangeRecentTab(tab)}
-              items={recentItems}
-              hasMore={recentHasMore}
-              loading={recentLoading}
-              hideDailyNotes={settings.hideDailyNotesInRecent}
-              onToggleHideDailyNotes={() => void handleToggleHideDailyNotes()}
-              notebookId={recentNotebookId}
-              notebooks={notebooks}
-              onChangeNotebook={(nbId) => void handleChangeRecentNotebook(nbId)}
-              keyword={recentKeyword}
-              onChangeKeyword={(kw) => handleChangeRecentKeyword(kw)}
-              onLoadMore={() =>
-                void loadRecentDocs(
-                  recentTab,
-                  notebooks,
-                  recentReadsStore,
-                  settings.hideDailyNotesInRecent,
-                  recentNotebookId,
-                  recentKeyword,
-                  recentOffset + PAGE_SIZE,
-                  true,
-                )
-              }
-              onOpenDoc={openDoc}
-            />
+            <div className="sph-order-recent">
+              <RecentDocsCard
+                activeTab={recentTab}
+                onChangeTab={(tab) => void handleChangeRecentTab(tab)}
+                items={recentItems}
+                hasMore={recentHasMore}
+                loading={recentLoading}
+                hideDailyNotes={settings.hideDailyNotesInRecent}
+                onToggleHideDailyNotes={() => void handleToggleHideDailyNotes()}
+                notebookId={recentNotebookId}
+                notebooks={notebooks}
+                onChangeNotebook={(nbId) => void handleChangeRecentNotebook(nbId)}
+                keyword={recentKeyword}
+                onChangeKeyword={(kw) => handleChangeRecentKeyword(kw)}
+                onLoadMore={() =>
+                  void loadRecentDocs(
+                    recentTab,
+                    notebooks,
+                    recentReadsStore,
+                    settings.hideDailyNotesInRecent,
+                    recentNotebookId,
+                    recentKeyword,
+                    recentOffset + PAGE_SIZE,
+                    true,
+                  )
+                }
+                onOpenDoc={openDoc}
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col gap-4 min-w-0">
-            <MiniCalendarCard
-              year={calYear}
-              month={calMonth}
-              todayStr={todayStr}
-              weekStartDay={settings.weekStartDay}
-              showTodoBadge={settings.showDiaryTodoBadge}
-              daysMap={calendarDays}
-              notebooks={notebooks}
-              activeNotebookId={activeDiaryNotebookId}
-              onChangeMonth={(y, m) => void handleChangeCalendarMonth(y, m)}
-              onSelectNotebook={(nbId) => void handleSelectDiaryNotebook(nbId)}
-              onClickDate={(d) => void handleClickDiaryDate(d)}
-              onJumpToday={() => {
-                void handleChangeCalendarMonth(currentYear, currentMonth);
-                void handleClickDiaryDate(todayStr);
-              }}
-            />
+          <div className="sph-bento-col-right">
+            <div className="sph-order-calendar">
+              <MiniCalendarCard
+                year={calYear}
+                month={calMonth}
+                todayStr={todayStr}
+                weekStartDay={settings.weekStartDay}
+                showTodoBadge={settings.showDiaryTodoBadge}
+                daysMap={calendarDays}
+                notebooks={notebooks}
+                activeNotebookId={activeDiaryNotebookId}
+                onChangeMonth={(y, m) => void handleChangeCalendarMonth(y, m)}
+                onSelectNotebook={(nbId) => void handleSelectDiaryNotebook(nbId)}
+                onClickDate={(d) => void handleClickDiaryDate(d)}
+                onJumpToday={() => {
+                  void handleChangeCalendarMonth(currentYear, currentMonth);
+                  void handleClickDiaryDate(todayStr);
+                }}
+              />
+            </div>
 
-            <HabitCard
-              habits={habitsStore.habits}
-              checkins={habitsStore.checkins}
-              todayStr={todayStr}
-              weekStartDay={settings.weekStartDay}
-              onToggleToday={(id) => void handleToggleHabitToday(id)}
-              onUpdateTodayDuration={(id, mins) => void handleUpdateHabitTodayDuration(id, mins)}
-              onOpenDetail={(id) => setActiveHabitId(id)}
-              onCreateHabit={(draft) => void handleCreateHabit(draft)}
-            />
+            <div className="sph-order-habits">
+              <HabitCard
+                habits={habitsStore.habits}
+                checkins={habitsStore.checkins}
+                todayStr={todayStr}
+                weekStartDay={settings.weekStartDay}
+                onToggleToday={(id) => void handleToggleHabitToday(id)}
+                onUpdateTodayDuration={(id, mins) => void handleUpdateHabitTodayDuration(id, mins)}
+                onOpenDetail={(id) => setActiveHabitId(id)}
+                onCreateHabit={(draft) => void handleCreateHabit(draft)}
+              />
+            </div>
 
-            <TaskCard
-              tasks={tasksStore.tasks}
-              categories={tasksStore.categories}
-              onCreateTask={(title, pr, cat) => void handleCreateTask(title, pr, cat)}
-              onToggleComplete={(id) => void handleToggleTaskComplete(id)}
-              onUpdateTask={(id, patch) => void handleUpdateTask(id, patch)}
-              onDeleteTask={(id) => void handleDeleteTask(id)}
-              onClearCompleted={() => void handleClearCompletedTasks()}
-              onSaveCategories={(cats) => void handleSaveCategories(cats)}
-              onPickDoc={(id) => setDocPickerTarget({ kind: 'task', id })}
-              onOpenDoc={openDoc}
-            />
+            <div className="sph-order-tasks">
+              <TaskCard
+                tasks={tasksStore.tasks}
+                categories={tasksStore.categories}
+                onCreateTask={(title, pr, cat) => void handleCreateTask(title, pr, cat)}
+                onToggleComplete={(id) => void handleToggleTaskComplete(id)}
+                onUpdateTask={(id, patch) => void handleUpdateTask(id, patch)}
+                onDeleteTask={(id) => void handleDeleteTask(id)}
+                onClearCompleted={() => void handleClearCompletedTasks()}
+                onSaveCategories={(cats) => void handleSaveCategories(cats)}
+                onPickDoc={(id) => setDocPickerTarget({ kind: 'task', id })}
+                onOpenDoc={openDoc}
+              />
+            </div>
           </div>
         </div>
       </div>

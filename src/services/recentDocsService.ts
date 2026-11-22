@@ -6,7 +6,7 @@ import {
   parseTags,
 } from '../domain/docPreview';
 import type { DocPreviewItem, RecentReadRecord } from '../domain/types';
-import { escapeSqlString, type SiYuanClient, type SiYuanNotebook } from './siyuanApi';
+import { escapeSqlLike, escapeSqlString, type SiYuanClient, type SiYuanNotebook } from './siyuanApi';
 
 const IMAGE_ASSET_REGEX = /\.(png|jpe?g|webp|gif|avif|svg)$/i;
 
@@ -134,8 +134,10 @@ export async function fetchRecentModifiedDocs(
   }
   const kw = query.keyword?.trim();
   if (kw) {
-    const safeKw = escapeSqlString(kw);
-    predicates.push(`(content LIKE '%${safeKw}%' OR hpath LIKE '%${safeKw}%' OR tag LIKE '%${safeKw}%')`);
+    const safeKw = escapeSqlLike(kw);
+    predicates.push(
+      `(content LIKE '%${safeKw}%' ESCAPE '\\' OR hpath LIKE '%${safeKw}%' ESCAPE '\\' OR tag LIKE '%${safeKw}%' ESCAPE '\\')`,
+    );
   }
 
   const fetchLimit = query.limit + 1;

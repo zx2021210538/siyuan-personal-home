@@ -38,6 +38,10 @@ export function escapeSqlString(val: string): string {
   return val.replace(/'/g, "''");
 }
 
+export function escapeSqlLike(val: string): string {
+  return escapeSqlString(val.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_'));
+}
+
 async function postApi<T>(url: string, data?: Record<string, unknown>): Promise<T> {
   const res = await fetchSyncPost(url, data ?? {});
   if (res.code !== 0) {
@@ -114,9 +118,9 @@ export function createSiYuanClient(): SiYuanClient {
     },
 
     async searchDocs(keyword: string): Promise<SearchDocHit[]> {
-      const safe = escapeSqlString(keyword.trim());
+      const safe = escapeSqlLike(keyword.trim());
       const where = safe
-        ? `type = 'd' AND (content LIKE '%${safe}%' OR hpath LIKE '%${safe}%')`
+        ? `type = 'd' AND (content LIKE '%${safe}%' ESCAPE '\\' OR hpath LIKE '%${safe}%' ESCAPE '\\')`
         : `type = 'd'`;
       return this.sql<SearchDocHit>(
         `SELECT id, box, hpath, content FROM blocks WHERE ${where} ORDER BY updated DESC LIMIT 30`,

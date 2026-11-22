@@ -178,4 +178,37 @@ describe('HomePage integration (Task 9)', () => {
       resolveCreate?.('new-past-doc');
     });
   });
+
+  it('SettingsModal validates backup schema BEFORE asking window.confirm and closes on Escape', async () => {
+    const { storage } = createMemoryStorage();
+    const api = createMockApi();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <HomePage
+        api={api}
+        storage={storage}
+        openDoc={vi.fn()}
+        todayOverride="2026-11-22"
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('个人主页设计笔记')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '打开设置' }));
+    expect(screen.getByText('个人主页设置')).toBeInTheDocument();
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const badFile = new File(['{"version":999}'], 'bad.json', { type: 'application/json' });
+    Object.defineProperty(badFile, 'text', { value: async () => '{"version":999}' });
+    fireEvent.change(fileInput, { target: { files: [badFile] } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/版本或插件标识不匹配/)).toBeInTheDocument();
+    });
+    expect(confirmSpy).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByText('个人主页设置')).toBeNull();
+    confirmSpy.mockRestore();
+  });
 });

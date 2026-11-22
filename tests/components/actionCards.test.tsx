@@ -117,12 +117,20 @@ describe('Action Cards (Task 8)', () => {
     // Inline duration edit
     fireEvent.click(screen.getByRole('button', { name: '修改 每日阅读 今日耗时' }));
     const durInput = screen.getByLabelText('今日耗时分钟');
-    fireEvent.change(durInput, { target: { value: '45' } });
-    fireEvent.keyDown(durInput, { key: 'Enter' });
+    // Blurring an empty input must NOT overwrite duration with 0
+    fireEvent.change(durInput, { target: { value: '' } });
+    fireEvent.blur(durInput);
+    expect(onUpdateTodayDuration).not.toHaveBeenCalled();
+
+    // Re-open and commit valid value
+    fireEvent.click(screen.getByRole('button', { name: '修改 每日阅读 今日耗时' }));
+    const durInput2 = screen.getByLabelText('今日耗时分钟');
+    fireEvent.change(durInput2, { target: { value: '45' } });
+    fireEvent.keyDown(durInput2, { key: 'Enter' });
     expect(onUpdateTodayDuration).toHaveBeenCalledWith('h-daily', 45);
   });
 
-  it('HabitDetailModal allows backfilling historical date and moving habit order', () => {
+  it('HabitDetailModal backfills unchecked days, selects checked days for editing without immediate uncheck, and closes on Escape', () => {
     const habit: HabitItem = {
       id: 'h-1',
       name: '每日阅读',
@@ -139,16 +147,19 @@ describe('Action Cards (Task 8)', () => {
     };
     const onSetDateCheckin = vi.fn();
     const onMoveOrder = vi.fn();
+    const onClose = vi.fn();
 
     render(
       <HabitDetailModal
         habit={habit}
-        checkins={{}}
+        checkins={{
+          '2026-11-10': { done: true, durationMinutes: 40, note: '旧笔记', checkedAt: 1, updatedAt: 1 },
+        }}
         todayStr="2026-11-22"
         weekStartDay={1}
         isFirst={false}
         isLast={false}
-        onClose={vi.fn()}
+        onClose={onClose}
         onSetDateCheckin={onSetDateCheckin}
         onUpdateHabit={vi.fn()}
         onMoveOrder={onMoveOrder}
@@ -159,15 +170,30 @@ describe('Action Cards (Task 8)', () => {
       />,
     );
 
+    // Clicking unchecked day backfills immediately
     fireEvent.click(screen.getByRole('button', { name: '补卡 2026-11-15' }));
     expect(onSetDateCheckin).toHaveBeenCalledWith('h-1', '2026-11-15', {
       done: true,
       durationMinutes: 30,
       note: undefined,
     });
+    onSetDateCheckin.mockClear();
+
+    // Clicking already-checked day selects it for editing without unchecking it
+    fireEvent.click(screen.getByRole('button', { name: '补卡 2026-11-10' }));
+    expect(onSetDateCheckin).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '取消打卡' }));
+    expect(onSetDateCheckin).toHaveBeenCalledWith('h-1', '2026-11-10', {
+      done: false,
+      durationMinutes: undefined,
+      note: '旧笔记',
+    });
 
     fireEvent.click(screen.getByRole('button', { name: '上移习惯' }));
     expect(onMoveOrder).toHaveBeenCalledWith('h-1', 'up');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('TaskCard creates task on Enter without due date inputs, switches views, toggles completion, and cycles priority', () => {
@@ -236,5 +262,39 @@ describe('Action Cards (Task 8)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '按维度分组' }));
     expect(screen.getAllByText('学习').length).toBeGreaterThan(0);
+
+    // IME composing Enter should NOT submit a task
+    onCreateTask.mockClear();
+    fireEvent.change(input, { target: { value: 'pinyin' } });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    expect(onCreateTask).not.toHaveBeenCalled();
+  });
+
+  it('TaskCard commits category rename only on blur/Enter and ignores blank renames', () => {
+    const onSaveCategories = vi.fn();
+    render(
+      <TaskCard
+        tasks={[]}
+        categories={DEFAULT_TASK_CATEGORIES}
+        onCreateTask={vi.fn()}
+        onToggleComplete={vi.fn()}
+        onUpdateTask={vi.fn()}
+        onDeleteTask={vi.fn()}
+        onClearCompleted={vi.fn()}
+        onSaveCategories={onSaveCategories}
+        onPickDoc={vi.fn()}
+        onOpenDoc={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '管理维度' }));
+    const catInput = screen.getByLabelText('重命名维度 工作');
+    fireEvent.change(catInput, { target: { value: '科研工作' } });
+    // Should NOT save per keystroke
+    expect(onSaveCategories).not.toHaveBeenCalled();
+
+    fireEvent.blur(catInput);
+    expect(onSaveCategories).toHaveBeenCalledTimes(1);
+    expect(onSaveCategories.mock.calls[0][0][0].name).toBe('科研工作');
   });
 });
