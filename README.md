@@ -1,31 +1,36 @@
-# 个人主页（siyuan-personal-home）
+# Personal Home (`siyuan-personal-home`)
 
-面向思源笔记（SiYuan Note `>= 3.8.11`）的「静谧书房」风格个人主页插件，采用 4 页签编辑感布局，零侧边栏 Dock 占用（仅保留单个顶栏入口与快捷键 `Alt+Shift+H`）。
+[简体中文](./README.zh-CN.md) | **English**
 
-## 核心功能
+A calm, editorial-style personal home tab for [SiYuan Note](https://github.com/siyuan-note/siyuan) — unifying note analytics, an annual writing heatmap, a daily-note calendar with native read-only preview, Notebook Navigator-style note browsing, dual-dimension habit tracking, and lightweight due-date-free tasks in a single clean custom tab.
 
-- **总览**：文档总数 / 累计字数与块数 / 近 7 日活跃 / 今年日记统计、全宽 53 周年度写作足迹热力图、等高「今日日记 + 今日节奏」卡片与近期笔记画廊。
-- **笔记（Notebook Navigator 风格）**：支持「最近改过 / 最近读过」切换、按时间自动分组（今天 / 昨天 / 近 7 天 / 近 30 天 / 按月）、列表与两列宽卡片网格切换、即点即调的外观面板（0–5 行预览行数、缩略图/标签显示、可选两端对齐与首行缩进）、点击 `#标签` 快速筛选，以及按笔记本或父文档 ID（含全部子文档）批量屏蔽。
-- **日记与日历**：与思源 `local-dailynoteid` 同步的月历视图、任意日期日记摘录预览、一键按模板创建日记及全宽年度足迹。
-- **计划与习惯**：双维度习惯打卡（每日连续天数 / 每周达标连周、一至日周圆点阵列、坚持跨度与可选打卡时长）与无截止日期焦虑的轻量任务管理（优先级 / 自定义维度 / 可选关联思源文档）。
-- **独立主题配色与字体跟随**：完全独立于思源主题色，预置 4 套亮色 + 4 套暗色方案并支持可视化自定义配色与持久化保存；自动继承思源编辑器/全局字体（如霞鹜文楷）。
-- **多端同步与备份**：结构化私有 JSON 存储（记录级 `updatedAt` LWW 合并 + 30 天软删除墓碑 GC + `sync-end` 自动刷新），支持一键 JSON 导出与导入恢复。
+![Personal Home Preview](./preview.png)
 
-## 本地开发与安装
+## Features
+
+- **Four-Tab Editorial Studio (`Overview` / `Notes` / `Journal & Calendar` / `Plan & Habits`)**: Opens as a single-instance custom tab (`Alt+Shift+H` or one top-bar icon) without cluttering sidebar docks.
+- **Note Stats & 53-Week Heatmap**: Tracks total documents, total words & blocks, 7-day activity, and annual diary days, with click-to-open or create any date's daily note.
+- **Daily Note Calendar & Native Read-Only Preview**: Syncs with SiYuan's active diary notebook (`local-dailynoteid`) and embeds SiYuan's native read-only `Protyle` viewer — compatible with any daily note template, AttributeView databases, embeds, callouts, images, and HTML widgets.
+- **Notebook Navigator-Style Note Browser**: Switch between Recently Modified and Recently Read (1.5s dwell tracking), List & 2-Column Grid views, date grouping, clickable `#tag` filtering, customizable preview lines (0–5, justify, first-line indent), and multi-ID hiding (notebooks and parent document subtrees).
+- **Habit Tracker & Due-Date-Free Tasks**: Daily streaks and weekly goal streaks with a 7-day week strip, backfill & duration logging, plus priority/category-grouped tasks with optional SiYuan document links and zero due-date anxiety.
+- **Independent Theme Studio & Font Inheritance**: Ships with 4 Light and 4 Dark built-in palettes plus a custom 6-color Theme Studio, completely decoupled from SiYuan host colors while optionally inheriting your SiYuan editor font.
+- **Sync-Friendly Private Storage**: Stores data in SiYuan's plugin storage with per-record LWW merge, 30-day tombstone GC, `sync-end` hot reload, and JSON backup import/export.
+
+## Usage
+
+1. Install **Personal Home** from the SiYuan Community Bazaar and enable it.
+2. Click the home icon in the top bar or press `Alt+Shift+H` (`⌥⇧H`) to open the Personal Home tab (optional auto-open on startup in Settings).
+3. Click **Theme** in the top-right bar to choose a preset or create your own palette, and click **Settings** to configure your diary notebook, hidden notebook/document IDs, or backups.
+
+## Development
 
 ```bash
 pnpm install
 pnpm type-check
 pnpm test
 pnpm build
-
-# 覆盖安装到本机思源插件目录（可通过环境变量 SIYUAN_PLUGIN_DIR 指定路径）
-pnpm install:local
 ```
 
-构建产物位于 `dist/`，同时会打包生成 `package.zip`。
+## License
 
-## 设计与实施文档
-
-- [设计文档](./docs/2026-11-22-siyuan-personal-home-design.md)
-- [实施计划](./docs/2026-11-22-siyuan-personal-home.md)
+[MIT](./LICENSE)
