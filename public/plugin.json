@@ -1,7 +1,7 @@
 {
   "name": "siyuan-personal-home",
-  "author": "Personal",
-  "url": "",
+  "author": "zx2021210538",
+  "url": "https://github.com/zx2021210538/siyuan-personal-home",
   "version": "0.1.0",
   "minAppVersion": "3.8.11",
   "backends": ["all"],
