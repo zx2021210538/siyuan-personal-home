@@ -63,24 +63,21 @@
     font-family: var(--sph-font-ui);
   }
 
-  .sph-root *:not(.sph-protyle-host):not(.sph-protyle-host *),
-  .sph-root *:not(.sph-protyle-host):not(.sph-protyle-host *)::before,
-  .sph-root *:not(.sph-protyle-host):not(.sph-protyle-host *)::after {
+  .sph-root :where(*:not(.sph-protyle-host):not(.sph-protyle-host *)),
+  .sph-root :where(*:not(.sph-protyle-host):not(.sph-protyle-host *))::before,
+  .sph-root :where(*:not(.sph-protyle-host):not(.sph-protyle-host *))::after {
     box-sizing: border-box;
     border-width: 0;
     border-style: solid;
     border-color: var(--sph-hairline);
   }
 
-  .sph-root h1:not(.sph-protyle-host *),
-  .sph-root h2:not(.sph-protyle-host *),
-  .sph-root h3:not(.sph-protyle-host *),
-  .sph-root p:not(.sph-protyle-host *) {
+  .sph-root :where(h1, h2, h3, p):where(:not(.sph-protyle-host *)) {
     margin: 0;
     font-weight: inherit;
   }
 
-  .sph-root button:not(.sph-protyle-host *) {
+  .sph-root :where(button):where(:not(.sph-protyle-host *)) {
     appearance: none;
     background: transparent;
     border: 0;
@@ -92,24 +89,22 @@
     line-height: inherit;
   }
 
-  .sph-root button:not(.sph-protyle-host *):disabled {
+  .sph-root :where(button:disabled):where(:not(.sph-protyle-host *)) {
     cursor: not-allowed;
   }
 
-  .sph-root input:not(.sph-protyle-host *),
-  .sph-root select:not(.sph-protyle-host *) {
+  .sph-root :where(input, select):where(:not(.sph-protyle-host *)) {
     font: inherit;
     color: inherit;
     margin: 0;
   }
 
-  .sph-root img:not(.sph-protyle-host *),
-  .sph-root svg:not(.sph-protyle-host *) {
+  .sph-root :where(img, svg):where(:not(.sph-protyle-host *)) {
     display: block;
     vertical-align: middle;
   }
 
-  .sph-root svg.lucide:not(.sph-protyle-host *) {
+  .sph-root :where(svg.lucide):where(:not(.sph-protyle-host *)) {
     fill: none;
   }
 

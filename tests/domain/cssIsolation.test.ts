@@ -12,7 +12,7 @@ describe('CSS isolation (no global Tailwind Preflight leak & unlayered SiYuan ho
     expect(content).toContain('tailwindcss/theme.css');
     expect(content).toContain('tailwindcss/utilities.css');
     expect(content).not.toContain('tailwindcss/preflight.css');
-    expect(content).toContain('.sph-root svg.lucide');
+    expect(content).toContain('svg.lucide');
   });
 
   it('defines narrow-screen Bento ordering rules matching Spec section 5.2', () => {
@@ -59,12 +59,19 @@ describe('CSS isolation (no global Tailwind Preflight leak & unlayered SiYuan ho
     expect(Number(match?.[1])).toBeLessThanOrEqual(5);
   });
 
-  it('excludes embedded native .sph-protyle-host subtrees from plugin base CSS resets', () => {
+  it('excludes embedded native .sph-protyle-host subtrees from plugin base CSS resets with zero-specificity :where()', () => {
     const cssPath = path.resolve(__dirname, '../../src/styles/index.css');
     const content = fs.readFileSync(cssPath, 'utf8');
-    expect(content).toContain('.sph-root *:not(.sph-protyle-host):not(.sph-protyle-host *)');
-    expect(content).toContain('.sph-root img:not(.sph-protyle-host *)');
-    expect(content).toContain('.sph-root button:not(.sph-protyle-host *)');
+    expect(content).toContain('.sph-root :where(*:not(.sph-protyle-host):not(.sph-protyle-host *))');
+    expect(content).toContain('.sph-root :where(button):where(:not(.sph-protyle-host *))');
+    expect(content).toContain('.sph-root :where(img, svg):where(:not(.sph-protyle-host *))');
     expect(content).toContain('.sph-protyle-host');
+
+    // Guard against specificity inflation: bare `button:not(.sph-protyle-host *)` has specificity (0,2,1),
+    // which would override `.sph-root .px-3` / `.sph-root .sph-nav-tab` (0,2,0) and collapse button padding to 0!
+    expect(content).not.toMatch(/\.sph-root\s+(?:\*|button|h1|h2|h3|p|input|select|img|svg)[^;\n]*:not\(\.sph-protyle-host/);
+
+    const transformed = transformSphCss(content);
+    expect(transformed).toContain(':where(button):where(:not(.sph-protyle-host *))');
   });
 });
