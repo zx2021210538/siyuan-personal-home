@@ -23,6 +23,28 @@ function formatWeekday(dateStr: string): string {
   return WEEKDAYS[dt.getDay()] ?? '';
 }
 
+const FallbackStickerImg: React.FC<{
+  candidates: string[];
+  alt: string;
+  compact?: boolean;
+}> = ({ candidates, alt, compact = false }) => {
+  const [idx, setIdx] = useState(0);
+  if (idx >= candidates.length) return null;
+  return (
+    <img
+      src={candidates[idx]}
+      alt={alt}
+      loading="lazy"
+      onError={() => setIdx((prev) => prev + 1)}
+      className={
+        compact
+          ? 'h-12 w-12 rounded-lg object-contain shrink-0'
+          : 'max-h-28 max-w-[130px] rounded-xl object-contain shrink-0'
+      }
+    />
+  );
+};
+
 export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
   todayStr,
   dailyNote,
@@ -195,15 +217,20 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
                             </p>
                           )}
 
-                          {expanded && validImgs.length > 0 && (
-                            <div className="flex flex-wrap gap-2 pt-1">
-                              {m.images.slice(0, 4).map((src, idx) => {
+                          {((expanded && (validImgs.length > 0 || (m.stickers && m.stickers.length > 0))) ||
+                            (!expanded && (validImgs.length > 0 || (m.stickers && m.stickers.length > 0)))) && (
+                            <div className="flex flex-wrap items-end gap-2.5 pt-1">
+                              {m.images.slice(0, expanded ? 6 : 2).map((src, idx) => {
                                 const imgKey = `img:${m.id}:${idx}`;
                                 if (failedMomentImgKeys.has(imgKey)) return null;
                                 return (
                                   <div
                                     key={imgKey}
-                                    className="w-24 h-20 rounded-lg overflow-hidden shrink-0"
+                                    className={
+                                      expanded
+                                        ? 'w-28 h-24 rounded-xl overflow-hidden shrink-0'
+                                        : 'w-16 h-12 rounded-lg overflow-hidden shrink-0'
+                                    }
                                     style={{ border: '1px solid var(--sph-hairline)' }}
                                   >
                                     <img
@@ -218,6 +245,14 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
                                   </div>
                                 );
                               })}
+                              {(m.stickers ?? []).slice(0, expanded ? 4 : 1).map((st) => (
+                                <FallbackStickerImg
+                                  key={`${m.id}:${st.code}`}
+                                  candidates={st.candidates}
+                                  alt={st.code}
+                                  compact={!expanded}
+                                />
+                              ))}
                             </div>
                           )}
                         </div>

@@ -179,6 +179,11 @@ export interface DocIconInfo {
   value: string;
 }
 
+export interface DiarySticker {
+  code: string;
+  candidates: string[];
+}
+
 export interface DiaryMoment {
   id: string;
   title: string;
@@ -187,6 +192,7 @@ export interface DiaryMoment {
   time?: string;
   text: string;
   images: string[];
+  stickers?: DiarySticker[];
 }
 
 export interface DocPreviewItem {

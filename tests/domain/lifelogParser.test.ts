@@ -69,7 +69,7 @@ describe('LifeLog HTML widget diary parser & service integration', () => {
     expect(extractLifeLogConfig('<div>plain html</div>')).toBeNull();
   });
 
-  it('parses only matching date moments with cleaned text, icons, periods, times, and images', () => {
+  it('parses only matching date moments with cleaned text, icons, periods, times, photos, and custom stickers', () => {
     const cfg = extractLifeLogConfig(SAMPLE_HTML)!;
     const moments = parseLifeLogMomentsForDate(SAMPLE_AV_DATA, cfg, '2026-11-10');
     expect(moments).toHaveLength(1);
@@ -81,7 +81,71 @@ describe('LifeLog HTML widget diary parser & service integration', () => {
       time: '09:00–11:30',
       text: '汇报顺利完成。',
       images: ['/assets/meal.jpg'],
+      stickers: [
+        {
+          code: 'custom/smile',
+          candidates: [
+            '/emojis/custom/smile.webp',
+            '/emojis/custom/smile.gif',
+            '/emojis/custom/smile.png',
+            '/emojis/custom/smile.jpg',
+            '/emojis/custom/smile.jpeg',
+            '/emojis/custom/smile.svg',
+          ],
+        },
+      ],
     });
+  });
+
+  it('extracts inline markdown images and resolves custom emoji stickers from window.siyuan.emojis', () => {
+    const win = window as unknown as {
+      siyuan?: { emojis?: Array<{ items?: Array<{ unicode?: string; description?: string }> }> };
+    };
+    const prev = win.siyuan;
+    win.siyuan = {
+      emojis: [
+        {
+          items: [{ unicode: 'AI娘/委屈哭哭.webp', description: 'AI娘/委屈哭哭' }],
+        },
+      ],
+    };
+    try {
+      const cfg = extractLifeLogConfig(SAMPLE_HTML)!;
+      const moments = parseLifeLogMomentsForDate(
+        {
+          view: {
+            groups: [
+              {
+                rows: [
+                  {
+                    id: 'row-inline',
+                    cells: [
+                      { value: { keyID: '20261025132958-iixx2xj', block: { content: '下午上班' } } },
+                      { value: { keyID: '20261025132958-x4hp44h', date: { isNotEmpty: true, formattedContent: '2026/10/29' } } },
+                      {
+                        value: {
+                          keyID: '20261025134457-kw7h6jg',
+                          text: { content: '基础模型算力不够:AI娘/委屈哭哭:\n![shot](assets/inline-shot.png)' },
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        cfg,
+        '2026-10-29',
+      );
+      expect(moments).toHaveLength(1);
+      expect(moments[0].text).toBe('基础模型算力不够');
+      expect(moments[0].images).toEqual(['/assets/inline-shot.png']);
+      expect(moments[0].stickers?.[0].code).toBe('AI娘/委屈哭哭');
+      expect(moments[0].stickers?.[0].candidates[0]).toBe(encodeURI('/emojis/AI娘/委屈哭哭.webp'));
+    } finally {
+      win.siyuan = prev;
+    }
   });
 
   it('fetchDailyNoteByDate populates real LifeLog moments and excludes raw HTML source from wordCount', async () => {

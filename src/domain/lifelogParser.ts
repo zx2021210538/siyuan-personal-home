@@ -1,4 +1,4 @@
-import type { DiaryMoment, DocIconInfo } from './types';
+import type { DiaryMoment, DiarySticker, DocIconInfo } from './types';
 
 export interface LifeLogWidgetConfig {
   avId: string;
@@ -62,36 +62,132 @@ function parseMomentIcon(rawIcon: string | undefined): DocIconInfo | null {
     }
   }
 
-  if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) {
+  if (/^https?:\/\//i.test(raw)) {
     return { type: 'image', value: raw };
   }
-  if (/^assets\//i.test(raw)) {
-    return { type: 'image', value: `/${raw}` };
+  if (raw.startsWith('/')) {
+    return { type: 'image', value: encodeURI(raw) };
   }
-  return { type: 'image', value: `/emojis/${raw}` };
+  if (/^assets\//i.test(raw)) {
+    return { type: 'image', value: encodeURI(`/${raw}`) };
+  }
+  return { type: 'image', value: encodeURI(`/emojis/${raw}`) };
 }
 
 function normalizeAssetUrl(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return '';
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return encodeURI(path);
 }
 
-function cleanMomentText(raw: string): string {
-  if (!raw) return '';
-  return raw
-    .replace(/\r\n?/g, '\n')
+interface SiYuanRuntimeEmojiItem {
+  unicode?: string;
+  description?: string;
+  description_zh_cn?: string;
+}
+
+interface SiYuanRuntimeEmojiGroup {
+  items?: SiYuanRuntimeEmojiItem[];
+}
+
+export function resolveCustomEmojiCandidates(code: string): string[] {
+  const clean = code.trim().replace(/^:|:$/g, '');
+  if (!clean) return [];
+
+  const urls: string[] = [];
+  const pushUnique = (u: string) => {
+    const encoded = /^https?:\/\//i.test(u) ? u : encodeURI(u);
+    if (encoded && !urls.includes(encoded)) urls.push(encoded);
+  };
+
+  // 1. Exact lookup from SiYuan runtime `window.siyuan.emojis` if available
+  try {
+    const win = window as unknown as { siyuan?: { emojis?: SiYuanRuntimeEmojiGroup[] } };
+    const groups = win?.siyuan?.emojis;
+    if (Array.isArray(groups)) {
+      for (const group of groups) {
+        if (!Array.isArray(group?.items)) continue;
+        for (const item of group.items) {
+          const uni = item?.unicode?.trim();
+          if (!uni) continue;
+          const withoutExt = uni.replace(/\.[a-z0-9]+$/i, '');
+          if (uni === clean || withoutExt === clean || item.description === clean) {
+            pushUnique(uni.startsWith('/') ? uni : `/emojis/${uni}`);
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore non-browser env
+  }
+
+  // 2. If shortcode already includes file extension, try it directly
+  if (/\.(webp|png|gif|jpe?g|svg|avif)$/i.test(clean)) {
+    pushUnique(`/emojis/${clean}`);
+  } else {
+    for (const ext of ['webp', 'gif', 'png', 'jpg', 'jpeg', 'svg']) {
+      pushUnique(`/emojis/${clean}.${ext}`);
+    }
+  }
+
+  return urls;
+}
+
+function extractInlineMediaAndClean(raw: string): {
+  text: string;
+  inlineImages: string[];
+  stickers: DiarySticker[];
+} {
+  if (!raw) return { text: '', inlineImages: [], stickers: [] };
+
+  const inlineImages: string[] = [];
+  const stickers: DiarySticker[] = [];
+  const seenStickerCodes = new Set<string>();
+
+  // Extract Markdown images: ![alt](url)
+  let work = raw.replace(/\r\n?/g, '\n');
+  work = work.replace(/!\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g, (_m, url: string) => {
+    const normalized = normalizeAssetUrl(url);
+    if (normalized && !inlineImages.includes(normalized)) {
+      inlineImages.push(normalized);
+    }
+    return '';
+  });
+
+  // Extract inline HTML <img> tags
+  work = work.replace(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi, (_m, url: string) => {
+    const normalized = normalizeAssetUrl(url);
+    if (normalized && !inlineImages.includes(normalized)) {
+      inlineImages.push(normalized);
+    }
+    return '';
+  });
+
+  // Extract SiYuan custom emoji / sticker shortcodes like :AI娘/委屈哭哭:
+  work = work.replace(/:([^:\s/]+\/[^:\s]+):/g, (_m, code: string) => {
+    if (!seenStickerCodes.has(code)) {
+      seenStickerCodes.add(code);
+      const candidates = resolveCustomEmojiCandidates(code);
+      if (candidates.length > 0) {
+        stickers.push({ code, candidates });
+      }
+    }
+    return '';
+  });
+
+  const text = work
     .replace(/^\s*\{:[\s\S]*?\}\s*$/gm, '')
-    .replace(/:[^:\s/]+\/[^:\s]+:/g, '')
     .replace(/\(\([a-zA-Z0-9-]+\s+["']([^"']+)["']\)\)/g, '$1')
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/~~([^~]+)~~/g, '$1')
     .replace(/==([^=]+)==/g, '$1')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  return { text, inlineImages, stickers };
 }
 
 interface RawAvCell {
@@ -191,7 +287,7 @@ export function parseLifeLogMomentsForDate(
     const title = (titleVal?.block?.content ?? titleVal?.text?.content ?? '').trim();
     const icon = parseMomentIcon(titleVal?.block?.icon);
     const rawText = recordVal?.text?.rich?.content || recordVal?.text?.content || '';
-    const text = cleanMomentText(rawText);
+    const { text, inlineImages, stickers } = extractInlineMediaAndClean(rawText);
     const time = (timeVal?.text?.content ?? '').trim() || undefined;
     const period = (periodVal?.mSelect?.[0]?.content ?? '').trim() || undefined;
     const images: string[] = [];
@@ -199,12 +295,15 @@ export function parseLifeLogMomentsForDate(
       for (const asset of imageVal.mAsset) {
         if (asset?.type === 'image' && asset.content) {
           const url = normalizeAssetUrl(asset.content);
-          if (url) images.push(url);
+          if (url && !images.includes(url)) images.push(url);
         }
       }
     }
+    for (const url of inlineImages) {
+      if (!images.includes(url)) images.push(url);
+    }
 
-    if (!title && !text && images.length === 0) continue;
+    if (!title && !text && images.length === 0 && stickers.length === 0) continue;
     moments.push({
       id: rowId,
       title: title || '无题',
@@ -213,6 +312,7 @@ export function parseLifeLogMomentsForDate(
       time,
       text,
       images,
+      stickers: stickers.length > 0 ? stickers : undefined,
     });
   }
 
