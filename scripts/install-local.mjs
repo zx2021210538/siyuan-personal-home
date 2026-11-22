@@ -13,4 +13,10 @@ if (!fs.existsSync(distDir)) {
 
 fs.mkdirSync(targetDir, { recursive: true });
 fs.cpSync(distDir, targetDir, { recursive: true, force: true });
+for (const file of ['README.md', 'README.zh-CN.md', 'LICENSE', 'preview.png']) {
+  const src = path.join(rootDir, file);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, path.join(targetDir, file));
+  }
+}
 console.log(`Installed siyuan-personal-home to ${targetDir}`);
