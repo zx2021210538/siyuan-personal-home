@@ -214,7 +214,7 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
         >
           {showThumb && doc.thumbnailUrl && (
             <div
-              className="w-full h-36 overflow-hidden"
+              className="w-full h-44 overflow-hidden"
               style={{ borderBottom: '1px solid var(--sph-hairline)' }}
             >
               <img
@@ -226,15 +226,15 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
               />
             </div>
           )}
-          <div className="p-4 flex-1 flex flex-col justify-between gap-3">
+          <div className="p-5 flex-1 flex flex-col justify-between gap-3">
             <div>
-              <div className="flex items-center gap-1.5 font-medium text-[15px] leading-snug">
+              <div className="flex items-center gap-1.5 font-medium text-[15.5px] leading-snug">
                 {renderDocIcon(doc)}
                 <span className="truncate">{doc.title}</span>
               </div>
               {!isCompact && doc.snippet && (
                 <p
-                  className={`text-[13.5px] mt-2 leading-[1.7] ${snippetExtraClass}`}
+                  className={`text-[13.5px] mt-2 leading-[1.75] ${snippetExtraClass}`}
                   style={{ color: 'var(--sph-muted)' }}
                 >
                   {doc.snippet}
@@ -382,7 +382,7 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
               <div
                 className={
                   viewStyle === 'grid'
-                    ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
+                    ? 'grid grid-cols-1 sm:grid-cols-2 gap-5'
                     : 'flex flex-col'
                 }
               >
@@ -398,7 +398,7 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
       <div
         className={
           viewStyle === 'grid' && navigatorMode
-            ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
+            ? 'grid grid-cols-1 sm:grid-cols-2 gap-5'
             : 'flex flex-col'
         }
       >

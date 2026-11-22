@@ -5,28 +5,29 @@
 
 @layer base {
   .sph-root {
-    --sph-bg: var(--b3-theme-background, #ffffff);
-    --sph-surface: var(--b3-theme-surface, #f7f7f5);
-    --sph-canvas: var(--sph-bg);
-    --sph-card: var(--sph-bg);
-    --sph-wash: color-mix(in srgb, var(--b3-theme-on-background, #1f2329) 2.8%, var(--sph-bg));
-    --sph-wash-hover: color-mix(in srgb, var(--b3-theme-on-background, #1f2329) 5.2%, var(--sph-bg));
+    /* Completely independent default palette (宣纸素笺), overridden live by active HomeThemePreset */
+    --sph-bg: #FAF8F4;
+    --sph-surface: #F2EFE8;
+    --sph-canvas: #FAF8F4;
+    --sph-card: #FFFFFF;
+    --sph-wash: #F2EFE8;
+    --sph-wash-hover: color-mix(in srgb, #26231F 5.2%, #F2EFE8);
     --sph-tile: var(--sph-wash);
     --sph-tile-hover: var(--sph-wash-hover);
 
-    --sph-text: var(--b3-theme-on-background, #222222);
-    --sph-muted: color-mix(in srgb, var(--b3-theme-on-background, #222222) 56%, transparent);
-    --sph-subtle: color-mix(in srgb, var(--b3-theme-on-background, #222222) 38%, transparent);
-    --sph-hairline: color-mix(in srgb, var(--b3-theme-on-background, #222222) 8.5%, transparent);
+    --sph-text: #26231F;
+    --sph-muted: #736C62;
+    --sph-subtle: color-mix(in srgb, #736C62 78%, #FAF8F4);
+    --sph-hairline: color-mix(in srgb, #26231F 8.5%, transparent);
     --sph-border: var(--sph-hairline);
-    --sph-border-strong: color-mix(in srgb, var(--b3-theme-on-background, #222222) 16%, transparent);
-    --sph-hover: color-mix(in srgb, var(--b3-theme-on-background, #222222) 4.5%, transparent);
+    --sph-border-strong: color-mix(in srgb, #26231F 16%, transparent);
+    --sph-hover: color-mix(in srgb, #26231F 4.5%, transparent);
 
-    --sph-accent: #52525b;
-    --sph-accent-fg: #ffffff;
-    --sph-accent-soft: color-mix(in srgb, var(--sph-accent) 10%, transparent);
-    --sph-accent-medium: color-mix(in srgb, var(--sph-accent) 18%, transparent);
-    --sph-accent-border: color-mix(in srgb, var(--sph-accent) 26%, transparent);
+    --sph-accent: #3E6B5C;
+    --sph-accent-fg: #FFFFFF;
+    --sph-accent-soft: color-mix(in srgb, var(--sph-accent) 11%, transparent);
+    --sph-accent-medium: color-mix(in srgb, var(--sph-accent) 19%, transparent);
+    --sph-accent-border: color-mix(in srgb, var(--sph-accent) 28%, transparent);
 
     --sph-font-ui: var(--b3-font-family, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif);
     --sph-font-body: var(--sph-font-editor, var(--b3-font-family-protyle, var(--sph-font-ui)));
@@ -37,11 +38,12 @@
       0 18px 42px -12px color-mix(in srgb, #000000 24%, transparent),
       0 2px 10px -2px color-mix(in srgb, #000000 10%, transparent);
 
-    --sph-heat-0: color-mix(in srgb, var(--b3-theme-on-background, #222222) 5.5%, transparent);
-    --sph-heat-1: color-mix(in srgb, var(--sph-accent) 24%, transparent);
-    --sph-heat-2: color-mix(in srgb, var(--sph-accent) 46%, transparent);
-    --sph-heat-3: color-mix(in srgb, var(--sph-accent) 70%, transparent);
+    --sph-heat-0: color-mix(in srgb, #26231F 5.5%, transparent);
+    --sph-heat-1: color-mix(in srgb, var(--sph-accent) 26%, transparent);
+    --sph-heat-2: color-mix(in srgb, var(--sph-accent) 48%, transparent);
+    --sph-heat-3: color-mix(in srgb, var(--sph-accent) 72%, transparent);
     --sph-heat-4: var(--sph-accent);
+    --sph-backdrop: rgba(15, 23, 42, 0.34);
 
     height: 100%;
     width: 100%;
@@ -55,11 +57,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     box-sizing: border-box;
-  }
-
-  .sph-root.sph-use-accent {
-    --sph-accent: var(--b3-theme-primary, #3575f0);
-    --sph-accent-fg: var(--b3-theme-on-primary, #ffffff);
   }
 
   .sph-root.sph-font-ui-only {
@@ -222,9 +219,29 @@
   }
 
   .sph-backdrop {
-    background-color: rgba(15, 23, 42, 0.36);
+    background-color: var(--sph-backdrop, rgba(15, 23, 42, 0.34));
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+  }
+
+  .sph-color-swatch {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+    border: 1px solid var(--sph-border-strong);
+    cursor: pointer;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  .sph-color-swatch::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  .sph-color-swatch::-webkit-color-swatch {
+    border: none;
+    border-radius: 7px;
   }
 
   .sph-bento-grid {

@@ -248,4 +248,44 @@ describe('HomePage integration (Task 9 + multi-tab studio)', () => {
       win.siyuan = prev;
     }
   });
+
+  it('ThemeStudioModal switches independent light/dark presets and saves custom palettes to settings', async () => {
+    const { storage, files } = createMemoryStorage();
+    const api = createMockApi();
+
+    const { container } = render(
+      <HomePage
+        api={api}
+        storage={storage}
+        openDoc={vi.fn()}
+        todayOverride="2026-11-22"
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('个人主页设计笔记')).toBeInTheDocument());
+
+    // Open Theme Studio from top nav
+    fireEvent.click(screen.getByRole('button', { name: '打开主题配色' }));
+    expect(screen.getByText('独立主题配色')).toBeInTheDocument();
+
+    // Switch to dark preset "静夜墨石"
+    fireEvent.click(screen.getByText('静夜墨石'));
+    await waitFor(() => {
+      expect(container.querySelector('.sph-root')?.getAttribute('data-sph-theme-mode')).toBe('dark');
+      expect(container.querySelector('.sph-root')?.getAttribute('style')).toContain('#15181E');
+    });
+
+    // Create & save a custom theme
+    fireEvent.click(screen.getByRole('button', { name: /基于当前主题自定义/ }));
+    const nameInput = screen.getByLabelText('自定义主题名称');
+    fireEvent.change(nameInput, { target: { value: '我的午夜蓝' } });
+    fireEvent.change(screen.getByLabelText('主题强调色 色值'), { target: { value: '#10B981' } });
+    fireEvent.click(screen.getByRole('button', { name: /保存并启用/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('我的午夜蓝')).toBeInTheDocument();
+      const saved = files.get('settings.json') as { customThemes?: Array<{ name: string; colors: { accent: string } }> };
+      expect(saved.customThemes?.some((t) => t.name === '我的午夜蓝' && t.colors.accent === '#10B981')).toBe(true);
+    });
+  });
 });

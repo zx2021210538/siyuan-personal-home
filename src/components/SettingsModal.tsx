@@ -1,18 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, EyeOff, FolderSearch, Plus, Upload, X } from 'lucide-react';
+import { Download, EyeOff, FolderSearch, Palette, Plus, Upload, X } from 'lucide-react';
 import { parseHiddenIdInput } from '../domain/docPreview';
 import { validateBackupBundle } from '../domain/storeMerge';
-import type { PluginSettings, TopBarPosition, WeekStartDay } from '../domain/types';
+import type { HomeThemePreset, PluginSettings, TopBarPosition, WeekStartDay } from '../domain/types';
 import type { SiYuanNotebook } from '../services/siyuanApi';
 
 export interface SettingsModalProps {
   open: boolean;
   settings: PluginSettings;
+  activeTheme?: HomeThemePreset;
   notebooks?: SiYuanNotebook[];
   diaryNotebookId?: string;
   hiddenIdLabels?: Record<string, string>;
   disableEscape?: boolean;
   onClose: () => void;
+  onOpenThemeStudio?: () => void;
   onChangeSettings: (patch: Partial<PluginSettings>) => void;
   onToggleHiddenNotebook?: (nbId: string) => void;
   onAddHiddenIds?: (ids: string[]) => void;
@@ -27,11 +29,13 @@ const PREVIEW_OPTIONS = [0, 1, 2, 3, 4, 5] as const;
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   open,
   settings,
+  activeTheme,
   notebooks = [],
   diaryNotebookId = '',
   hiddenIdLabels = {},
   disableEscape = false,
   onClose,
+  onOpenThemeStudio,
   onChangeSettings,
   onToggleHiddenNotebook,
   onAddHiddenIds,
@@ -182,17 +186,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <span>跟随思源主题强调色</span>
-            <label className="sph-switch">
-              <input
-                type="checkbox"
-                checked={settings.useThemeAccent}
-                onChange={(e) => onChangeSettings({ useThemeAccent: e.target.checked })}
-              />
-              <span className="sph-switch-track">
-                <span className="sph-switch-thumb" />
-              </span>
-            </label>
+            <div>
+              <div>独立主题配色</div>
+              <div className="text-[11px] flex items-center gap-1.5 mt-0.5" style={{ color: 'var(--sph-subtle)' }}>
+                {activeTheme && (
+                  <>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full inline-block"
+                      style={{
+                        backgroundColor: activeTheme.colors.canvas,
+                        border: '1px solid var(--sph-border-strong)',
+                      }}
+                    />
+                    <span
+                      className="w-2.5 h-2.5 rounded-full inline-block"
+                      style={{ backgroundColor: activeTheme.colors.accent }}
+                    />
+                    <span>
+                      当前：{activeTheme.name}（{activeTheme.mode === 'dark' ? '暗色' : '亮色'}）
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+            {onOpenThemeStudio && (
+              <button
+                type="button"
+                className="sph-btn px-3 py-1.5 text-xs shrink-0"
+                onClick={onOpenThemeStudio}
+              >
+                <Palette size={13} />
+                <span>切换 / 自定义</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center justify-between gap-3">

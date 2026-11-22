@@ -6,6 +6,7 @@ import {
   Check,
   CheckSquare,
   Compass,
+  Palette,
   RefreshCw,
   Settings,
 } from 'lucide-react';
@@ -17,8 +18,10 @@ import { RecentDocsCard } from '../components/RecentDocsCard';
 import { SettingsModal } from '../components/SettingsModal';
 import { StatsHeatmapCard } from '../components/StatsHeatmapCard';
 import { TaskCard } from '../components/TaskCard';
+import { ThemeStudioModal } from '../components/ThemeStudioModal';
 import { TodayDailyNoteCard } from '../components/TodayDailyNoteCard';
 import { formatRelativeTime } from '../domain/docPreview';
+import { buildThemeCssVars, DEFAULT_THEME_ID, resolveActiveTheme } from '../domain/themes';
 import { getActiveTasks, moveItemOrder, sortTasksByPriority } from '../domain/taskLogic';
 import {
   DEFAULT_NOTE_CARD_PREFS,
@@ -29,6 +32,7 @@ import {
   type HabitsStore,
   type HeatmapDay,
   type HomeSubTab,
+  type HomeThemePreset,
   type MonthCalendarDay,
   type NoteCardDisplayPrefs,
   type OverviewStats,
@@ -181,6 +185,8 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const [activeHabitId, setActiveHabitId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  const [themeStudioOpen, setThemeStudioOpen] = useState<boolean>(false);
+  const [previewTheme, setPreviewTheme] = useState<HomeThemePreset | null>(null);
   const [hiddenIdLabels, setHiddenIdLabels] = useState<Record<string, string>>({});
   const [docPickerTarget, setDocPickerTarget] = useState<
     { kind: 'task'; id: string } | { kind: 'habit'; id: string } | { kind: 'hiddenDoc' } | null
@@ -1005,30 +1011,62 @@ export const HomePage: React.FC<HomePageProps> = ({
     void handlePatchSettings(settingsPatch);
   };
 
+  const activeTheme = useMemo(
+    () => resolveActiveTheme(settings.activeThemeId, settings.customThemes),
+    [settings.activeThemeId, settings.customThemes],
+  );
+  const effectiveTheme = previewTheme ?? activeTheme;
+
+  const handleSelectTheme = (themeId: string) => {
+    void handlePatchSettings({ activeThemeId: themeId });
+  };
+
+  const handleSaveCustomTheme = (saved: HomeThemePreset, activate: boolean) => {
+    const curr = Array.isArray(settings.customThemes) ? settings.customThemes : [];
+    const exists = curr.some((t) => t.id === saved.id);
+    const nextList = exists ? curr.map((t) => (t.id === saved.id ? saved : t)) : [...curr, saved];
+    void handlePatchSettings({
+      customThemes: nextList,
+      ...(activate ? { activeThemeId: saved.id } : {}),
+    });
+  };
+
+  const handleDeleteCustomTheme = (themeId: string) => {
+    const curr = Array.isArray(settings.customThemes) ? settings.customThemes : [];
+    const nextList = curr.filter((t) => t.id !== themeId);
+    const nextActiveId =
+      settings.activeThemeId === themeId ? DEFAULT_THEME_ID : settings.activeThemeId;
+    void handlePatchSettings({
+      customThemes: nextList,
+      activeThemeId: nextActiveId,
+    });
+  };
+
   const rootStyle = useMemo(() => {
-    if (!settings.followEditorFont || !editorFontFamily) return undefined;
-    const stack = editorFontFamily
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .map((p) =>
-        /^['"].*['"]$/.test(p) ||
-        /^(serif|sans-serif|monospace|cursive|fantasy|system-ui)$/i.test(p)
-          ? p
-          : `"${p}"`,
-      )
-      .join(', ');
-    if (!stack) return undefined;
-    return {
-      '--sph-font-editor': `${stack}, var(--b3-font-family-protyle, var(--sph-font-ui))`,
-    } as React.CSSProperties;
-  }, [settings.followEditorFont, editorFontFamily]);
+    const vars: Record<string, string> = buildThemeCssVars(effectiveTheme);
+    if (settings.followEditorFont && editorFontFamily) {
+      const stack = editorFontFamily
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((p) =>
+          /^['"].*['"]$/.test(p) ||
+          /^(serif|sans-serif|monospace|cursive|fantasy|system-ui)$/i.test(p)
+            ? p
+            : `"${p}"`,
+        )
+        .join(', ');
+      if (stack) {
+        vars['--sph-font-editor'] = `${stack}, var(--b3-font-family-protyle, var(--sph-font-ui))`;
+      }
+    }
+    return vars as React.CSSProperties;
+  }, [effectiveTheme, settings.followEditorFont, editorFontFamily]);
 
   return (
     <div
-      className={`sph-root ${settings.useThemeAccent ? 'sph-use-accent' : ''} ${
-        settings.followEditorFont ? '' : 'sph-font-ui-only'
-      }`}
+      data-sph-theme-mode={effectiveTheme.mode}
+      className={`sph-root ${settings.followEditorFont ? '' : 'sph-font-ui-only'}`}
       style={rootStyle}
     >
       {/* Top Minimal Editorial Navigation Bar */}
@@ -1054,6 +1092,15 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              className="sph-btn-ghost px-2.5 py-1.5 text-xs"
+              aria-label="打开主题配色"
+              onClick={() => setThemeStudioOpen(true)}
+            >
+              <Palette size={13} />
+              <span className="hidden sm:inline">主题</span>
+            </button>
             <button
               type="button"
               className="sph-btn-ghost px-2.5 py-1.5 text-xs"
@@ -1572,11 +1619,16 @@ export const HomePage: React.FC<HomePageProps> = ({
       <SettingsModal
         open={settingsOpen}
         settings={settings}
+        activeTheme={activeTheme}
         notebooks={notebooks}
         diaryNotebookId={activeDiaryNotebookId}
         hiddenIdLabels={hiddenIdLabels}
-        disableEscape={Boolean(docPickerTarget)}
+        disableEscape={Boolean(docPickerTarget) || themeStudioOpen}
         onClose={() => setSettingsOpen(false)}
+        onOpenThemeStudio={() => {
+          setSettingsOpen(false);
+          setThemeStudioOpen(true);
+        }}
         onChangeSettings={(patch) => void handlePatchSettings(patch)}
         onToggleHiddenNotebook={(nbId) => void handleToggleHiddenNotebook(nbId)}
         onAddHiddenIds={(ids) => void handleAddHiddenIds(ids)}
@@ -1584,6 +1636,17 @@ export const HomePage: React.FC<HomePageProps> = ({
         onPickHiddenDoc={() => setDocPickerTarget({ kind: 'hiddenDoc' })}
         onExportJson={handleExportJson}
         onImportJson={handleImportJson}
+      />
+
+      <ThemeStudioModal
+        open={themeStudioOpen}
+        activeTheme={activeTheme}
+        customThemes={settings.customThemes ?? []}
+        onClose={() => setThemeStudioOpen(false)}
+        onSelectTheme={handleSelectTheme}
+        onSaveCustomTheme={handleSaveCustomTheme}
+        onDeleteCustomTheme={handleDeleteCustomTheme}
+        onPreviewTheme={setPreviewTheme}
       />
     </div>
   );

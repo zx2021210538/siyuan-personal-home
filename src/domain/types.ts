@@ -2,6 +2,25 @@ export type WeekStartDay = 0 | 1; // 0 = Sunday, 1 = Monday
 export type TopBarPosition = 'left' | 'right';
 export type RecentTabKey = 'modified' | 'read';
 export type HomeSubTab = 'overview' | 'notes' | 'journal' | 'plan';
+export type HomeThemeMode = 'light' | 'dark';
+
+export interface HomeThemeColors {
+  canvas: string;
+  surface: string;
+  wash: string;
+  text: string;
+  muted: string;
+  accent: string;
+}
+
+export interface HomeThemePreset {
+  id: string;
+  name: string;
+  mode: HomeThemeMode;
+  description?: string;
+  colors: HomeThemeColors;
+  builtIn?: boolean;
+}
 
 export interface NoteCardDisplayPrefs {
   previewLines: number; // 0 (compact) .. 5
@@ -29,6 +48,8 @@ export interface PluginSettings {
   showHeatmap: boolean;
   showDiaryTodoBadge: boolean;
   useThemeAccent: boolean;
+  activeThemeId?: string;
+  customThemes?: HomeThemePreset[];
   followEditorFont: boolean;
   hideDailyNotesInRecent: boolean;
   hiddenRecentNotebookIds?: string[];
@@ -51,7 +72,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   weekStartDay: 1,
   showHeatmap: true,
   showDiaryTodoBadge: true,
-  useThemeAccent: true,
+  useThemeAccent: false,
+  activeThemeId: 'light-parchment',
+  customThemes: [],
   followEditorFont: true,
   hideDailyNotesInRecent: false,
   hiddenRecentNotebookIds: [],
