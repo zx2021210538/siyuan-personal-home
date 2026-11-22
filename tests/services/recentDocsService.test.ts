@@ -142,6 +142,48 @@ describe('recentDocsService', () => {
 
     expect(res.items.map((i) => i.id)).toEqual(['d-alive']);
     expect(res.items[0].readAtMs).toBe(1000);
-    expect(pruneCb).toHaveBeenCalledWith(new Set(['d-alive']));
+    expect(pruneCb).toHaveBeenCalledWith(new Set(['d-deleted']));
+  });
+
+  it('skips dead-id pruning when any notebook is closed and uses ROW_NUMBER leaf-block SQL for snippets', async () => {
+    const queries: string[] = [];
+    const api = createMockApi(async (stmt) => {
+      queries.push(stmt);
+      if (stmt.includes("type = 'd'")) {
+        return [
+          {
+            id: 'd-open',
+            box: 'nb-1',
+            hpath: '/Open',
+            content: '打开本笔记',
+            tag: '',
+            ial: '',
+            updated: '20261122100000',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const pruneCb = vi.fn();
+    await fetchRecentReadDocs(
+      api,
+      [
+        { id: 'nb-1', name: '技术笔记', icon: '', closed: false },
+        { id: 'nb-closed', name: '归档本', icon: '', closed: true },
+      ],
+      [
+        { docId: 'd-in-closed-nb', lastReadAt: 2000, readCount: 1 },
+        { docId: 'd-open', lastReadAt: 1000, readCount: 1 },
+      ],
+      { notebookId: 'all', hideDailyNotes: false, limit: 12, offset: 0 },
+      pruneCb,
+    );
+
+    expect(pruneCb).not.toHaveBeenCalled();
+    const snippetSql = queries.find((q) => q.includes('ROW_NUMBER() OVER (PARTITION BY root_id'));
+    expect(snippetSql).toBeDefined();
+    expect(snippetSql).not.toContain("'l'");
+    expect(snippetSql).not.toContain("'b'");
   });
 });

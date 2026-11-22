@@ -101,4 +101,39 @@ describe('PersonalHomePlugin lifecycle (Task 10)', () => {
     expect(listeners.get('switch-protyle')?.size ?? 0).toBe(0);
     expect(listeners.get('sync-end')?.size ?? 0).toBe(0);
   });
+
+  it('implements onDataChanged, clears stale plugin.data cache before loadData, and throws when saveData returns non-zero code', async () => {
+    const plugin = new PersonalHomePlugin({} as never);
+    (plugin as unknown as { data: Record<string, unknown> }).data = {
+      'settings.json': { stale: true },
+    };
+    const loadSpy = vi.spyOn(plugin, 'loadData').mockImplementation(async (name: string) => {
+      // Must have cleared cached plugin.data[name] before calling loadData
+      expect((plugin as unknown as { data: Record<string, unknown> }).data[name]).toBeUndefined();
+      return null;
+    });
+    vi.spyOn(plugin, 'saveData').mockResolvedValue({ code: -1, msg: 'read only', data: null } as never);
+
+    await plugin.onload();
+    expect(loadSpy).toHaveBeenCalledWith('settings.json');
+    expect(typeof (plugin as unknown as { onDataChanged?: () => void }).onDataChanged).toBe('function');
+
+    const storage = (plugin as unknown as { storage: { saveSettings: (s: unknown) => Promise<unknown> } }).storage;
+    await expect(
+      storage.saveSettings({
+        version: 1,
+        topBarPosition: 'left',
+        autoOpenOnStart: true,
+        weekStartDay: 1,
+        showHeatmap: true,
+        showDiaryTodoBadge: true,
+        useThemeAccent: true,
+        hideDailyNotesInRecent: false,
+        recentTab: 'modified',
+        diaryNotebookId: '',
+      }),
+    ).rejects.toThrow(/read only|保存失败/i);
+
+    plugin.onunload();
+  });
 });

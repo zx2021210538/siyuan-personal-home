@@ -138,4 +138,44 @@ describe('HomePage integration (Task 9)', () => {
     fireEvent.click(screen.getByRole('button', { name: '打开设置' }));
     expect(screen.getByText('个人主页设置')).toBeInTheDocument();
   });
+
+  it('prevents duplicate daily note creation on rapid double click and isolates single corrupt storage file', async () => {
+    const { storage, files } = createMemoryStorage();
+    files.set('recent-reads.json', 'CORRUPT_NOT_JSON');
+
+    let resolveCreate: ((val: string) => void) | null = null;
+    const api = createMockApi();
+    (api.createDocWithMd as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+
+    render(
+      <HomePage
+        api={api}
+        storage={storage}
+        openDoc={vi.fn()}
+        todayOverride="2026-11-22"
+      />,
+    );
+
+    // Despite recent-reads.json being corrupt, page still loads other modules and shows warning banner
+    await waitFor(() => {
+      expect(screen.getByText('个人主页设计笔记')).toBeInTheDocument();
+      expect(screen.getByText(/recent-reads\.json/)).toBeInTheDocument();
+    });
+
+    const pastBtn = screen.getByRole('button', { name: /^2026-11-15$/ });
+    fireEvent.click(pastBtn);
+    fireEvent.click(pastBtn);
+
+    await waitFor(() => {
+      expect(api.createDocWithMd).toHaveBeenCalledTimes(1);
+    });
+    await act(async () => {
+      resolveCreate?.('new-past-doc');
+    });
+  });
 });

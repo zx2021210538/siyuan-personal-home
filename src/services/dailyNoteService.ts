@@ -90,7 +90,7 @@ export async function fetchTodayDailyNote(
   if (!docId) return null;
 
   const safeDocId = escapeSqlString(docId);
-  const [docRows, bodyRows, assetRows] = await Promise.all([
+  const [docRows, bodyRows, wordRows, assetRows] = await Promise.all([
     api.sql<{
       id: string;
       box: string;
@@ -100,8 +100,11 @@ export async function fetchTodayDailyNote(
       ial: string;
       updated: string;
     }>(`SELECT id, box, hpath, content, tag, ial, updated FROM blocks WHERE id = '${safeDocId}' AND type = 'd' LIMIT 1`),
-    api.sql<{ content: string; markdown: string; length: number }>(
-      `SELECT content, markdown, length FROM blocks WHERE root_id = '${safeDocId}' AND type IN ('p','h','l','b','callout','c','t') ORDER BY sort ASC LIMIT 30`,
+    api.sql<{ content: string; markdown: string }>(
+      `SELECT content, markdown FROM blocks WHERE root_id = '${safeDocId}' AND type IN ('p','h','c','m','t') AND content != '' ORDER BY sort ASC LIMIT 12`,
+    ),
+    api.sql<{ totalWords: number | null }>(
+      `SELECT COALESCE(SUM(length), 0) AS totalWords FROM blocks WHERE root_id = '${safeDocId}' AND type IN ('p','h','c','m','t','html','callout')`,
     ),
     api.sql<{ path: string }>(
       `SELECT path FROM assets WHERE root_id = '${safeDocId}' LIMIT 10`,
@@ -113,7 +116,7 @@ export async function fetchTodayDailyNote(
 
   const titleImg = extractTitleImageUrl(doc.ial);
   const assetImg = assetRows.find((a) => IMAGE_ASSET_REGEX.test(a.path))?.path ?? null;
-  const wordCount = bodyRows.reduce((acc, r) => acc + Number(r.length ?? 0), 0);
+  const wordCount = Number(wordRows[0]?.totalWords ?? 0);
 
   return {
     id: doc.id,

@@ -184,11 +184,14 @@ describe('siyuanApi + statsService + dailyNoteService', () => {
           },
         ];
       }
+      if (stmt.includes('SUM(length)')) {
+        return [{ totalWords: 512 }];
+      }
       if (stmt.includes('FROM assets')) {
         return [{ path: 'assets/photo.jpg' }];
       }
       return [
-        { content: '今天完成了个人主页的设计。', markdown: '今天完成了个人主页的设计。', length: 13 },
+        { content: '今天完成了个人主页的设计。', markdown: '今天完成了个人主页的设计。' },
       ];
     });
     const api = createMockApi({ sql: sqlMock });
@@ -196,6 +199,6 @@ describe('siyuanApi + statsService + dailyNoteService', () => {
     expect(preview?.id).toBe('doc-today');
     expect(preview?.snippet).toContain('今天完成了个人主页的设计');
     expect(preview?.thumbnailUrl).toBe('assets/photo.jpg');
-    expect(preview?.wordCount).toBe(13);
+    expect(preview?.wordCount).toBe(512);
   });
 });

@@ -77,10 +77,10 @@ async function enrichDocPreviews(
 
   const [snippetRows, assetRows] = await Promise.all([
     api.sql<{ root_id: string; content: string; markdown: string }>(
-      `SELECT root_id, content, markdown FROM blocks WHERE root_id IN (${inClause}) AND type IN ('p','h','l','b','callout') AND content != '' ORDER BY root_id, sort ASC LIMIT ${docIds.length * 6}`,
+      `SELECT root_id, content, markdown FROM (SELECT root_id, content, markdown, ROW_NUMBER() OVER (PARTITION BY root_id ORDER BY sort ASC) AS rn FROM blocks WHERE root_id IN (${inClause}) AND type IN ('p','h','c','m','t') AND content != '') WHERE rn <= 4 LIMIT ${docIds.length * 4}`,
     ),
     api.sql<{ root_id: string; path: string }>(
-      `SELECT root_id, path FROM assets WHERE root_id IN (${inClause}) LIMIT ${docIds.length * 4}`,
+      `SELECT root_id, path FROM (SELECT root_id, path, ROW_NUMBER() OVER (PARTITION BY root_id ORDER BY id ASC) AS rn FROM assets WHERE root_id IN (${inClause}) AND (LOWER(path) LIKE '%.png' OR LOWER(path) LIKE '%.jpg' OR LOWER(path) LIKE '%.jpeg' OR LOWER(path) LIKE '%.webp' OR LOWER(path) LIKE '%.gif' OR LOWER(path) LIKE '%.avif' OR LOWER(path) LIKE '%.svg')) WHERE rn = 1 LIMIT ${docIds.length}`,
     ),
   ]);
 
@@ -154,7 +154,7 @@ export async function fetchRecentReadDocs(
   notebooks: SiYuanNotebook[],
   records: RecentReadRecord[],
   query: RecentDocsQuery,
-  onDeadIds?: (validIds: Set<string>) => void,
+  onDeadIds?: (deadIds: Set<string>) => void,
 ): Promise<{ items: DocPreviewItem[]; hasMore: boolean }> {
   if (records.length === 0) {
     return { items: [], hasMore: false };
@@ -174,9 +174,17 @@ export async function fetchRecentReadDocs(
   ]);
 
   const rowMap = new Map(docRows.map((r) => [r.id, r]));
-  const validIds = new Set(docRows.map((r) => r.id));
-  if (validIds.size < records.length && onDeadIds) {
-    onDeadIds(validIds);
+  const hasClosedNotebook = notebooks.some((nb) => nb.closed);
+  if (!hasClosedNotebook && onDeadIds) {
+    const deadIds = new Set<string>();
+    for (const rec of records) {
+      if (!rowMap.has(rec.docId)) {
+        deadIds.add(rec.docId);
+      }
+    }
+    if (deadIds.size > 0) {
+      onDeadIds(deadIds);
+    }
   }
 
   const dailySet = new Set(dailyAttrs.map((a) => a.root_id));

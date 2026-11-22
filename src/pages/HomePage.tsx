@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Settings } from 'lucide-react';
 import { DocPickerModal } from '../components/DocPickerModal';
 import { HabitCard, type CreateHabitDraft } from '../components/HabitCard';
@@ -134,23 +134,73 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
+  const recentReqIdRef = useRef(0);
+  const diaryReqIdRef = useRef(0);
+  const keywordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlightDailyDatesRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    return () => {
+      if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
+    };
+  }, []);
+
+  const reportError = useCallback((err: unknown, fallback: string) => {
+    setErrorBanner(err instanceof Error ? err.message : fallback);
+  }, []);
+
+  const safeRun = useCallback(
+    async (fn: () => Promise<void>, fallbackMsg: string) => {
+      try {
+        await fn();
+      } catch (err) {
+        reportError(err, fallbackMsg);
+      }
+    },
+    [reportError],
+  );
+
   const activeNotebookName = useMemo(
     () => notebooks.find((n) => n.id === activeDiaryNotebookId)?.name ?? '',
     [notebooks, activeDiaryNotebookId],
   );
 
   const loadStoredData = useCallback(async () => {
-    const [loadedSettings, loadedTasks, loadedHabits, loadedReads] = await Promise.all([
+    const errors: string[] = [];
+    const [settingsRes, tasksRes, habitsRes, readsRes] = await Promise.allSettled([
       storage.loadSettings(),
       storage.loadTasks(),
       storage.loadHabits(),
       storage.loadRecentReads(),
     ]);
+
+    const loadedSettings =
+      settingsRes.status === 'fulfilled'
+        ? settingsRes.value
+        : (errors.push(settingsRes.reason instanceof Error ? settingsRes.reason.message : 'settings.json 读取失败'),
+          DEFAULT_SETTINGS);
+    if (tasksRes.status === 'fulfilled') {
+      setTasksStore(tasksRes.value);
+    } else {
+      errors.push(tasksRes.reason instanceof Error ? tasksRes.reason.message : 'tasks.json 读取失败');
+    }
+    if (habitsRes.status === 'fulfilled') {
+      setHabitsStore(habitsRes.value);
+    } else {
+      errors.push(habitsRes.reason instanceof Error ? habitsRes.reason.message : 'habits.json 读取失败');
+    }
+    const loadedReads =
+      readsRes.status === 'fulfilled'
+        ? readsRes.value
+        : (errors.push(readsRes.reason instanceof Error ? readsRes.reason.message : 'recent-reads.json 读取失败'),
+          { version: 1 as const, records: [] });
+
     setSettings(loadedSettings);
     setRecentTab(loadedSettings.recentTab);
-    setTasksStore(loadedTasks);
-    setHabitsStore(loadedHabits);
     setRecentReadsStore(loadedReads);
+    if (errors.length > 0) {
+      setErrorBanner(errors.join('；'));
+    }
     return { loadedSettings, loadedReads };
   }, [storage]);
 
@@ -163,6 +213,7 @@ export const HomePage: React.FC<HomePageProps> = ({
       cMonth: number,
       showTodoBadge: boolean,
     ) => {
+      const reqId = ++diaryReqIdRef.current;
       setTodayLoading(true);
       try {
         const [ovStats, hm, calMap, todayDoc] = await Promise.all([
@@ -171,12 +222,15 @@ export const HomePage: React.FC<HomePageProps> = ({
           fetchMonthCalendarDays(api, nbId, cYear, cMonth, showTodoBadge),
           fetchTodayDailyNote(api, nbId, todayStr, nbName),
         ]);
+        if (reqId !== diaryReqIdRef.current) return;
         setStats(ovStats);
         setHeatmapData(hm);
         setCalendarDays(calMap);
         setTodayDailyNote(todayDoc);
       } finally {
-        setTodayLoading(false);
+        if (reqId === diaryReqIdRef.current) {
+          setTodayLoading(false);
+        }
       }
     },
     [api, todayStr],
@@ -193,6 +247,7 @@ export const HomePage: React.FC<HomePageProps> = ({
       offset: number,
       append: boolean,
     ) => {
+      const reqId = ++recentReqIdRef.current;
       setRecentLoading(true);
       try {
         const query = {
@@ -205,14 +260,20 @@ export const HomePage: React.FC<HomePageProps> = ({
         const res =
           tab === 'modified'
             ? await fetchRecentModifiedDocs(api, nbs, query)
-            : await fetchRecentReadDocs(api, nbs, reads.records, query, (validIds) => {
-                void storage.pruneRecentReads(validIds).then(setRecentReadsStore);
+            : await fetchRecentReadDocs(api, nbs, reads.records, query, (deadIds) => {
+                void storage
+                  .pruneRecentReads(deadIds)
+                  .then(setRecentReadsStore)
+                  .catch(() => undefined);
               });
+        if (reqId !== recentReqIdRef.current) return;
         setRecentItems((prev) => (append ? [...prev, ...res.items] : res.items));
         setRecentHasMore(res.hasMore);
         setRecentOffset(offset);
       } finally {
-        setRecentLoading(false);
+        if (reqId === recentReqIdRef.current) {
+          setRecentLoading(false);
+        }
       }
     },
     [api, storage],
@@ -291,62 +352,75 @@ export const HomePage: React.FC<HomePageProps> = ({
   }, [subscribeSyncRefresh, bootstrapAll]);
 
   const handlePatchSettings = async (patch: Partial<PluginSettings>) => {
-    const next = { ...settings, ...patch, version: 1 as const };
-    setSettings(next);
-    await storage.saveSettings(next);
-    if (patch.showDiaryTodoBadge !== undefined) {
-      const calMap = await fetchMonthCalendarDays(
-        api,
-        activeDiaryNotebookId,
-        calYear,
-        calMonth,
-        next.showDiaryTodoBadge,
-      );
-      setCalendarDays(calMap);
-    }
+    await safeRun(async () => {
+      const saved = await storage.updateSettings((curr) => ({
+        ...curr,
+        ...patch,
+        version: 1,
+      }));
+      setSettings(saved);
+      if (patch.showDiaryTodoBadge !== undefined) {
+        const calMap = await fetchMonthCalendarDays(
+          api,
+          activeDiaryNotebookId,
+          calYear,
+          calMonth,
+          saved.showDiaryTodoBadge,
+        );
+        setCalendarDays(calMap);
+      }
+    }, '保存设置失败');
   };
 
   const handleSelectDiaryNotebook = async (nbId: string) => {
-    setActiveDiaryNotebookId(nbId);
-    const nbName = notebooks.find((n) => n.id === nbId)?.name ?? '';
-    await Promise.all([
-      api.setLocalStorageVal('local-dailynoteid', nbId),
-      handlePatchSettings({ diaryNotebookId: nbId }),
-    ]);
-    await loadDiaryAndStats(
-      nbId,
-      nbName,
-      heatmapYear,
-      calYear,
-      calMonth,
-      settings.showDiaryTodoBadge,
-    );
+    await safeRun(async () => {
+      setActiveDiaryNotebookId(nbId);
+      const nbName = notebooks.find((n) => n.id === nbId)?.name ?? '';
+      await Promise.all([
+        api.setLocalStorageVal('local-dailynoteid', nbId),
+        handlePatchSettings({ diaryNotebookId: nbId }),
+      ]);
+      await loadDiaryAndStats(
+        nbId,
+        nbName,
+        heatmapYear,
+        calYear,
+        calMonth,
+        settings.showDiaryTodoBadge,
+      );
+    }, '切换日记本失败');
   };
 
   const handleChangeHeatmapYear = async (year: number) => {
-    setHeatmapYear(year);
-    const hm = await fetchYearHeatmap(api, year, activeDiaryNotebookId);
-    setHeatmapData(hm);
+    await safeRun(async () => {
+      setHeatmapYear(year);
+      const hm = await fetchYearHeatmap(api, year, activeDiaryNotebookId);
+      setHeatmapData(hm);
+    }, '加载年度热力图失败');
   };
 
   const handleChangeCalendarMonth = async (year: number, month: number) => {
-    setCalYear(year);
-    setCalMonth(month);
-    const calMap = await fetchMonthCalendarDays(
-      api,
-      activeDiaryNotebookId,
-      year,
-      month,
-      settings.showDiaryTodoBadge,
-    );
-    setCalendarDays(calMap);
+    await safeRun(async () => {
+      setCalYear(year);
+      setCalMonth(month);
+      const calMap = await fetchMonthCalendarDays(
+        api,
+        activeDiaryNotebookId,
+        year,
+        month,
+        settings.showDiaryTodoBadge,
+      );
+      setCalendarDays(calMap);
+    }, '加载月历失败');
   };
 
   const handleClickDiaryDate = async (dateStr: string) => {
+    const lockKey = `${activeDiaryNotebookId}:${dateStr}`;
+    if (inFlightDailyDatesRef.current.has(lockKey)) return;
+    inFlightDailyDatesRef.current.add(lockKey);
     try {
       const docId = await openOrCreateDailyNote(api, activeDiaryNotebookId, dateStr, todayStr);
       openDoc(docId);
-      // Refresh calendar & today card softly
       await loadDiaryAndStats(
         activeDiaryNotebookId,
         activeNotebookName,
@@ -356,137 +430,158 @@ export const HomePage: React.FC<HomePageProps> = ({
         settings.showDiaryTodoBadge,
       );
     } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : '打开或创建日记失败');
+      reportError(err, '打开或创建日记失败');
+    } finally {
+      inFlightDailyDatesRef.current.delete(lockKey);
     }
   };
 
   const handleChangeRecentTab = async (tab: RecentTabKey) => {
-    setRecentTab(tab);
-    await handlePatchSettings({ recentTab: tab });
-    const latestReads = tab === 'read' ? await storage.loadRecentReads() : recentReadsStore;
-    if (tab === 'read') setRecentReadsStore(latestReads);
-    await loadRecentDocs(
-      tab,
-      notebooks,
-      latestReads,
-      settings.hideDailyNotesInRecent,
-      recentNotebookId,
-      recentKeyword,
-      0,
-      false,
-    );
+    await safeRun(async () => {
+      setRecentTab(tab);
+      await handlePatchSettings({ recentTab: tab });
+      const latestReads = tab === 'read' ? await storage.loadRecentReads() : recentReadsStore;
+      if (tab === 'read') setRecentReadsStore(latestReads);
+      await loadRecentDocs(
+        tab,
+        notebooks,
+        latestReads,
+        settings.hideDailyNotesInRecent,
+        recentNotebookId,
+        recentKeyword,
+        0,
+        false,
+      );
+    }, '加载最近笔记失败');
   };
 
   const handleToggleHideDailyNotes = async () => {
-    const nextVal = !settings.hideDailyNotesInRecent;
-    await handlePatchSettings({ hideDailyNotesInRecent: nextVal });
-    await loadRecentDocs(
-      recentTab,
-      notebooks,
-      recentReadsStore,
-      nextVal,
-      recentNotebookId,
-      recentKeyword,
-      0,
-      false,
-    );
+    await safeRun(async () => {
+      const nextVal = !settings.hideDailyNotesInRecent;
+      await handlePatchSettings({ hideDailyNotesInRecent: nextVal });
+      await loadRecentDocs(
+        recentTab,
+        notebooks,
+        recentReadsStore,
+        nextVal,
+        recentNotebookId,
+        recentKeyword,
+        0,
+        false,
+      );
+    }, '更新筛选条件失败');
   };
 
   const handleChangeRecentNotebook = async (nbId: string) => {
-    setRecentNotebookId(nbId);
-    await loadRecentDocs(
-      recentTab,
-      notebooks,
-      recentReadsStore,
-      settings.hideDailyNotesInRecent,
-      nbId,
-      recentKeyword,
-      0,
-      false,
-    );
+    await safeRun(async () => {
+      setRecentNotebookId(nbId);
+      await loadRecentDocs(
+        recentTab,
+        notebooks,
+        recentReadsStore,
+        settings.hideDailyNotesInRecent,
+        nbId,
+        recentKeyword,
+        0,
+        false,
+      );
+    }, '筛选笔记本失败');
   };
 
-  const handleChangeRecentKeyword = async (kw: string) => {
+  const handleChangeRecentKeyword = (kw: string) => {
     setRecentKeyword(kw);
-    await loadRecentDocs(
-      recentTab,
-      notebooks,
-      recentReadsStore,
-      settings.hideDailyNotesInRecent,
-      recentNotebookId,
-      kw,
-      0,
-      false,
-    );
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
+    keywordTimerRef.current = setTimeout(() => {
+      void safeRun(
+        () =>
+          loadRecentDocs(
+            recentTab,
+            notebooks,
+            recentReadsStore,
+            settings.hideDailyNotesInRecent,
+            recentNotebookId,
+            kw,
+            0,
+            false,
+          ),
+        '搜索最近笔记失败',
+      );
+    }, 200);
   };
 
   // --- Habits handlers ---
   const handleCreateHabit = async (draft: CreateHabitDraft) => {
-    const now = Date.now();
-    const nextStore = await storage.updateHabits((curr) => {
-      const activeCount = curr.habits.filter((h) => !h.deleted && !h.archived).length;
-      const item: HabitItem = {
-        id: generateId('habit'),
-        name: draft.name,
-        icon: draft.icon,
-        color: draft.color,
-        frequencyType: draft.frequencyType,
-        weeklyTarget: draft.weeklyTarget,
-        trackDuration: draft.trackDuration,
-        defaultDurationMinutes: draft.defaultDurationMinutes,
-        createdAt: todayStr,
-        archived: false,
-        sortOrder: activeCount,
-        updatedAt: now,
-      };
-      return { ...curr, habits: [...curr.habits, item] };
-    });
-    setHabitsStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateHabits((curr) => {
+        const activeCount = curr.habits.filter((h) => !h.deleted && !h.archived).length;
+        const item: HabitItem = {
+          id: generateId('habit'),
+          name: draft.name,
+          icon: draft.icon,
+          color: draft.color,
+          frequencyType: draft.frequencyType,
+          weeklyTarget: draft.weeklyTarget,
+          trackDuration: draft.trackDuration,
+          defaultDurationMinutes: draft.defaultDurationMinutes,
+          createdAt: todayStr,
+          archived: false,
+          sortOrder: activeCount,
+          updatedAt: now,
+        };
+        return { ...curr, habits: [...curr.habits, item] };
+      });
+      setHabitsStore(nextStore);
+    }, '创建习惯失败');
   };
 
   const handleToggleHabitToday = async (habitId: string) => {
-    const now = Date.now();
-    const nextStore = await storage.updateHabits((curr) => {
-      const habit = curr.habits.find((h) => h.id === habitId);
-      const map = { ...(curr.checkins[habitId] ?? {}) };
-      const existing = map[todayStr];
-      const nextDone = !existing?.done;
-      map[todayStr] = {
-        done: nextDone,
-        durationMinutes: nextDone
-          ? existing?.durationMinutes ??
-            (habit?.trackDuration ? habit.defaultDurationMinutes ?? 30 : undefined)
-          : undefined,
-        note: existing?.note,
-        checkedAt: now,
-        updatedAt: now,
-      };
-      return {
-        ...curr,
-        checkins: { ...curr.checkins, [habitId]: map },
-      };
-    });
-    setHabitsStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateHabits((curr) => {
+        const habit = curr.habits.find((h) => h.id === habitId);
+        const map = { ...(curr.checkins[habitId] ?? {}) };
+        const existing = map[todayStr];
+        const nextDone = !existing?.done;
+        map[todayStr] = {
+          done: nextDone,
+          durationMinutes: nextDone
+            ? existing?.durationMinutes ??
+              (habit?.trackDuration ? habit.defaultDurationMinutes ?? 30 : undefined)
+            : undefined,
+          note: existing?.note,
+          checkedAt: now,
+          updatedAt: now,
+        };
+        return {
+          ...curr,
+          checkins: { ...curr.checkins, [habitId]: map },
+        };
+      });
+      setHabitsStore(nextStore);
+    }, '习惯打卡保存失败');
   };
 
   const handleUpdateHabitTodayDuration = async (habitId: string, minutes: number) => {
-    const now = Date.now();
-    const nextStore = await storage.updateHabits((curr) => {
-      const map = { ...(curr.checkins[habitId] ?? {}) };
-      const existing = map[todayStr];
-      map[todayStr] = {
-        done: true,
-        durationMinutes: Math.max(0, minutes),
-        note: existing?.note,
-        checkedAt: existing?.checkedAt ?? now,
-        updatedAt: now,
-      };
-      return {
-        ...curr,
-        checkins: { ...curr.checkins, [habitId]: map },
-      };
-    });
-    setHabitsStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateHabits((curr) => {
+        const map = { ...(curr.checkins[habitId] ?? {}) };
+        const existing = map[todayStr];
+        map[todayStr] = {
+          done: true,
+          durationMinutes: Math.max(0, minutes),
+          note: existing?.note,
+          checkedAt: existing?.checkedAt ?? now,
+          updatedAt: now,
+        };
+        return {
+          ...curr,
+          checkins: { ...curr.checkins, [habitId]: map },
+        };
+      });
+      setHabitsStore(nextStore);
+    }, '更新耗时失败');
   };
 
   const handleSetHabitDateCheckin = async (
@@ -494,42 +589,48 @@ export const HomePage: React.FC<HomePageProps> = ({
     dateStr: string,
     payload: { done: boolean; durationMinutes?: number; note?: string },
   ) => {
-    const now = Date.now();
-    const nextStore = await storage.updateHabits((curr) => {
-      const map = { ...(curr.checkins[habitId] ?? {}) };
-      map[dateStr] = {
-        done: payload.done,
-        durationMinutes: payload.done ? payload.durationMinutes : undefined,
-        note: payload.note,
-        checkedAt: now,
-        updatedAt: now,
-      };
-      return {
-        ...curr,
-        checkins: { ...curr.checkins, [habitId]: map },
-      };
-    });
-    setHabitsStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateHabits((curr) => {
+        const map = { ...(curr.checkins[habitId] ?? {}) };
+        map[dateStr] = {
+          done: payload.done,
+          durationMinutes: payload.done ? payload.durationMinutes : undefined,
+          note: payload.note,
+          checkedAt: now,
+          updatedAt: now,
+        };
+        return {
+          ...curr,
+          checkins: { ...curr.checkins, [habitId]: map },
+        };
+      });
+      setHabitsStore(nextStore);
+    }, '更新补卡记录失败');
   };
 
   const handleUpdateHabit = async (habitId: string, patch: Partial<HabitItem>) => {
-    const now = Date.now();
-    const nextStore = await storage.updateHabits((curr) => ({
-      ...curr,
-      habits: curr.habits.map((h) => (h.id === habitId ? { ...h, ...patch, updatedAt: now } : h)),
-    }));
-    setHabitsStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateHabits((curr) => ({
+        ...curr,
+        habits: curr.habits.map((h) => (h.id === habitId ? { ...h, ...patch, updatedAt: now } : h)),
+      }));
+      setHabitsStore(nextStore);
+    }, '更新习惯失败');
   };
 
   const handleMoveHabitOrder = async (habitId: string, direction: 'up' | 'down') => {
-    const now = Date.now();
-    const nextStore = await storage.updateHabits((curr) => {
-      const visible = curr.habits.filter((h) => !h.deleted && !h.archived);
-      const others = curr.habits.filter((h) => h.deleted || h.archived);
-      const reordered = moveItemOrder(visible, habitId, direction, now);
-      return { ...curr, habits: [...reordered, ...others] };
-    });
-    setHabitsStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateHabits((curr) => {
+        const visible = curr.habits.filter((h) => !h.deleted && !h.archived);
+        const others = curr.habits.filter((h) => h.deleted || h.archived);
+        const reordered = moveItemOrder(visible, habitId, direction, now);
+        return { ...curr, habits: [...reordered, ...others] };
+      });
+      setHabitsStore(nextStore);
+    }, '调整习惯顺序失败');
   };
 
   const handleArchiveHabit = async (habitId: string) => {
@@ -544,48 +645,54 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   // --- Tasks handlers ---
   const handleCreateTask = async (title: string, priority: TaskPriority, categoryId: string) => {
-    const now = Date.now();
-    const nextStore = await storage.updateTasks((curr) => {
-      const item: TaskItem = {
-        id: generateId('task'),
-        title,
-        priority,
-        categoryId,
-        completed: false,
-        createdAt: now,
-        updatedAt: now,
-        sortOrder: curr.tasks.length,
-      };
-      return { ...curr, tasks: [...curr.tasks, item] };
-    });
-    setTasksStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateTasks((curr) => {
+        const item: TaskItem = {
+          id: generateId('task'),
+          title,
+          priority,
+          categoryId,
+          completed: false,
+          createdAt: now,
+          updatedAt: now,
+          sortOrder: curr.tasks.length,
+        };
+        return { ...curr, tasks: [...curr.tasks, item] };
+      });
+      setTasksStore(nextStore);
+    }, '创建任务失败');
   };
 
   const handleToggleTaskComplete = async (taskId: string) => {
-    const now = Date.now();
-    const nextStore = await storage.updateTasks((curr) => ({
-      ...curr,
-      tasks: curr.tasks.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              completed: !t.completed,
-              completedAt: !t.completed ? now : undefined,
-              updatedAt: now,
-            }
-          : t,
-      ),
-    }));
-    setTasksStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateTasks((curr) => ({
+        ...curr,
+        tasks: curr.tasks.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                completed: !t.completed,
+                completedAt: !t.completed ? now : undefined,
+                updatedAt: now,
+              }
+            : t,
+        ),
+      }));
+      setTasksStore(nextStore);
+    }, '更新任务状态失败');
   };
 
   const handleUpdateTask = async (taskId: string, patch: Partial<TaskItem>) => {
-    const now = Date.now();
-    const nextStore = await storage.updateTasks((curr) => ({
-      ...curr,
-      tasks: curr.tasks.map((t) => (t.id === taskId ? { ...t, ...patch, updatedAt: now } : t)),
-    }));
-    setTasksStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateTasks((curr) => ({
+        ...curr,
+        tasks: curr.tasks.map((t) => (t.id === taskId ? { ...t, ...patch, updatedAt: now } : t)),
+      }));
+      setTasksStore(nextStore);
+    }, '更新任务失败');
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -593,22 +700,26 @@ export const HomePage: React.FC<HomePageProps> = ({
   };
 
   const handleClearCompletedTasks = async () => {
-    const now = Date.now();
-    const nextStore = await storage.updateTasks((curr) => ({
-      ...curr,
-      tasks: curr.tasks.map((t) =>
-        t.completed && !t.deleted ? { ...t, deleted: true, updatedAt: now } : t,
-      ),
-    }));
-    setTasksStore(nextStore);
+    await safeRun(async () => {
+      const now = Date.now();
+      const nextStore = await storage.updateTasks((curr) => ({
+        ...curr,
+        tasks: curr.tasks.map((t) =>
+          t.completed && !t.deleted ? { ...t, deleted: true, updatedAt: now } : t,
+        ),
+      }));
+      setTasksStore(nextStore);
+    }, '清空已完成任务失败');
   };
 
   const handleSaveCategories = async (categories: TaskCategory[]) => {
-    const nextStore = await storage.updateTasks((curr) => ({
-      ...curr,
-      categories,
-    }));
-    setTasksStore(nextStore);
+    await safeRun(async () => {
+      const nextStore = await storage.updateTasks((curr) => ({
+        ...curr,
+        categories,
+      }));
+      setTasksStore(nextStore);
+    }, '保存任务维度失败');
   };
 
   // --- Backup handlers ---
@@ -732,7 +843,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               notebooks={notebooks}
               onChangeNotebook={(nbId) => void handleChangeRecentNotebook(nbId)}
               keyword={recentKeyword}
-              onChangeKeyword={(kw) => void handleChangeRecentKeyword(kw)}
+              onChangeKeyword={(kw) => handleChangeRecentKeyword(kw)}
               onLoadMore={() =>
                 void loadRecentDocs(
                   recentTab,

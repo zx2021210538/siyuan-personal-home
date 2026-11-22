@@ -33,7 +33,7 @@ export function extractTitleImageUrl(ial: string | null | undefined): string | n
 
   const candidate = urlMatch[1].trim();
   if (!candidate || /^data:image\/svg\+xml/i.test(candidate)) {
-    return candidate || null;
+    return null;
   }
   return candidate;
 }

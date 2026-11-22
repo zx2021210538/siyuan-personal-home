@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowUpRight, BookMarked, PenLine } from 'lucide-react';
 import { formatRelativeTime } from '../domain/docPreview';
 import type { DocPreviewItem } from '../domain/types';
@@ -27,6 +27,13 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
   onCreateToday,
 }) => {
   const weekday = formatWeekday(todayStr);
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const [iconFailed, setIconFailed] = useState(false);
+
+  useEffect(() => {
+    setThumbFailed(false);
+    setIconFailed(false);
+  }, [dailyNote?.id, dailyNote?.thumbnailUrl]);
 
   return (
     <section className="sph-card p-4">
@@ -81,7 +88,16 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
           <div className="min-w-0 flex-1 flex flex-col justify-between gap-2">
             <div>
               <div className="flex items-center gap-1.5 font-medium text-sm">
-                {dailyNote.icon?.type === 'emoji' && <span>{dailyNote.icon.value}</span>}
+                {dailyNote.icon?.type === 'emoji' ? (
+                  <span>{dailyNote.icon.value}</span>
+                ) : dailyNote.icon?.type === 'image' && !iconFailed ? (
+                  <img
+                    src={dailyNote.icon.value}
+                    alt=""
+                    className="w-4 h-4 rounded-sm object-contain shrink-0"
+                    onError={() => setIconFailed(true)}
+                  />
+                ) : null}
                 <span className="truncate">{dailyNote.title}</span>
               </div>
               <p
@@ -103,10 +119,11 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
             </div>
           </div>
 
-          {dailyNote.thumbnailUrl && (
+          {dailyNote.thumbnailUrl && !thumbFailed && (
             <img
               src={dailyNote.thumbnailUrl}
               alt={dailyNote.title}
+              onError={() => setThumbFailed(true)}
               className="w-24 h-20 rounded-lg object-cover shrink-0"
               style={{ border: '1px solid var(--sph-border)' }}
             />

@@ -134,4 +134,37 @@ describe('StorageService', () => {
     expect(restoredTasks.tasks[0].title).toBe('导出测试');
     expect(restoredReads.records[0].docId).toBe('doc-abc');
   });
+
+  it('pruneRecentReads removes only explicit deadIds without wiping concurrent disk additions', async () => {
+    const { adapter, files } = createMemoryAdapter();
+    const storage = new StorageService(adapter);
+
+    await storage.saveRecentRead('doc-alive', 1000);
+    await storage.saveRecentRead('doc-dead', 2000);
+
+    // Concurrent write from another device/tracker lands on disk after snapshot
+    const disk = structuredClone(files.get('recent-reads.json')) as {
+      version: 1;
+      records: Array<{ docId: string; lastReadAt: number; readCount: number }>;
+    };
+    disk.records.unshift({ docId: 'doc-concurrent-new', lastReadAt: 3000, readCount: 1 });
+    files.set('recent-reads.json', disk);
+
+    const pruned = await storage.pruneRecentReads(new Set(['doc-dead']));
+    expect(pruned.records.map((r) => r.docId)).toEqual(['doc-concurrent-new', 'doc-alive']);
+  });
+
+  it('serializes updateSettings without losing concurrent patches', async () => {
+    const { adapter } = createMemoryAdapter();
+    const storage = new StorageService(adapter);
+
+    await Promise.all([
+      storage.updateSettings((s) => ({ ...s, showHeatmap: false })),
+      storage.updateSettings((s) => ({ ...s, diaryNotebookId: 'nb-sync' })),
+    ]);
+
+    const finalSettings = await storage.loadSettings();
+    expect(finalSettings.showHeatmap).toBe(false);
+    expect(finalSettings.diaryNotebookId).toBe('nb-sync');
+  });
 });

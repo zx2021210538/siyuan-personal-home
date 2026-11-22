@@ -44,8 +44,22 @@ export default class PersonalHomePlugin extends Plugin {
 
   async onload(): Promise<void> {
     this.storage = new StorageService({
-      loadData: (name) => this.loadData(name),
-      saveData: (name, data) => this.saveData(name, data),
+      loadData: async (name) => {
+        const cache = (this as unknown as { data?: Record<string, unknown> }).data;
+        if (cache && Object.prototype.hasOwnProperty.call(cache, name)) {
+          delete cache[name];
+        }
+        return this.loadData(name);
+      },
+      saveData: async (name, data) => {
+        const res = (await this.saveData(name, data)) as
+          | { code?: number; msg?: string }
+          | undefined
+          | void;
+        if (res && typeof res === 'object' && typeof res.code === 'number' && res.code !== 0) {
+          throw new Error(res.msg || `保存失败（${name}, code=${res.code}）`);
+        }
+      },
     });
 
     try {
@@ -135,6 +149,10 @@ export default class PersonalHomePlugin extends Plugin {
     if (this.cachedSettings.autoOpenOnStart && !this.activeTabCtx) {
       this.openHomeTab();
     }
+  }
+
+  onDataChanged(): void {
+    this.handleSyncEnd();
   }
 
   openHomeTab(): void {

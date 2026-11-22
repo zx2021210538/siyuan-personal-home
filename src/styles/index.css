@@ -1,4 +1,5 @@
-@import "tailwindcss";
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
 
 .sph-root {
   --sph-bg: var(--b3-theme-background, #ffffff);
@@ -36,6 +37,18 @@
 .sph-root *::before,
 .sph-root *::after {
   box-sizing: border-box;
+}
+
+.sph-root button,
+.sph-root input,
+.sph-root select {
+  font: inherit;
+  color: inherit;
+}
+
+.sph-root img,
+.sph-root svg {
+  display: block;
 }
 
 .sph-card {

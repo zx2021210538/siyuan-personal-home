@@ -71,6 +71,16 @@ export class StorageService {
     });
   }
 
+  async updateSettings(updater: (curr: PluginSettings) => PluginSettings): Promise<PluginSettings> {
+    return this.enqueue(STORAGE_FILES.settings, async () => {
+      const rawDisk = parseRawIfNeeded(await this.adapter.loadData(STORAGE_FILES.settings));
+      const disk = normalizeSettings(rawDisk);
+      const next = normalizeSettings(updater(structuredClone(disk)));
+      await this.adapter.saveData(STORAGE_FILES.settings, next);
+      return next;
+    });
+  }
+
   async loadTasks(): Promise<TasksStore> {
     const raw = parseRawIfNeeded(await this.adapter.loadData(STORAGE_FILES.tasks));
     const store = normalizeTasksStore(raw);
@@ -145,13 +155,16 @@ export class StorageService {
     });
   }
 
-  async pruneRecentReads(validIds: Set<string>): Promise<RecentReadsStore> {
+  async pruneRecentReads(deadIds: Set<string>): Promise<RecentReadsStore> {
+    if (deadIds.size === 0) {
+      return this.loadRecentReads();
+    }
     return this.enqueue(STORAGE_FILES.recentReads, async () => {
       const rawDisk = parseRawIfNeeded(await this.adapter.loadData(STORAGE_FILES.recentReads));
       const disk = normalizeRecentReadsStore(rawDisk);
       const filtered: RecentReadsStore = {
         version: 1,
-        records: disk.records.filter((r) => validIds.has(r.docId)),
+        records: disk.records.filter((r) => !deadIds.has(r.docId)),
       };
       if (filtered.records.length !== disk.records.length) {
         await this.adapter.saveData(STORAGE_FILES.recentReads, filtered);

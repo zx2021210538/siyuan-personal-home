@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Clock, Eye, FileText, Search } from 'lucide-react';
 import { formatRelativeTime } from '../domain/docPreview';
 import type { DocPreviewItem, RecentTabKey } from '../domain/types';
@@ -39,6 +39,8 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
 }) => {
   const openNotebooks = notebooks.filter((nb) => !nb.closed);
   const nowMs = Date.now();
+  const [failedThumbIds, setFailedThumbIds] = useState<Set<string>>(() => new Set());
+  const [failedIconIds, setFailedIconIds] = useState<Set<string>>(() => new Set());
 
   return (
     <section className="sph-card p-4 flex flex-col gap-3">
@@ -170,6 +172,15 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
                     <div className="flex items-center gap-1.5 text-sm font-medium">
                       {doc.icon?.type === 'emoji' ? (
                         <span className="shrink-0">{doc.icon.value}</span>
+                      ) : doc.icon?.type === 'image' && !failedIconIds.has(doc.id) ? (
+                        <img
+                          src={doc.icon.value}
+                          alt=""
+                          className="w-4 h-4 rounded-sm object-contain shrink-0"
+                          onError={() =>
+                            setFailedIconIds((prev) => new Set(prev).add(doc.id))
+                          }
+                        />
                       ) : (
                         <FileText
                           size={14}
@@ -213,11 +224,14 @@ export const RecentDocsCard: React.FC<RecentDocsCardProps> = ({
                   </div>
                 </div>
 
-                {doc.thumbnailUrl && (
+                {doc.thumbnailUrl && !failedThumbIds.has(doc.id) && (
                   <img
                     src={doc.thumbnailUrl}
                     alt={doc.title}
                     loading="lazy"
+                    onError={() =>
+                      setFailedThumbIds((prev) => new Set(prev).add(doc.id))
+                    }
                     className="w-20 h-[68px] rounded-lg object-cover shrink-0 self-center"
                     style={{ border: '1px solid var(--sph-border)' }}
                   />

@@ -167,4 +167,39 @@ describe('Content Cards (Task 7)', () => {
 
     expect(screen.getByText(/浏览过的笔记会自动出现在这里/)).toBeInTheDocument();
   });
+
+  it('RecentDocsCard renders custom image doc icons and hides broken thumbnails cleanly on error', () => {
+    const docWithImgIcon: DocPreviewItem = {
+      ...SAMPLE_DOC,
+      id: 'doc-img-icon',
+      title: '自定义图标笔记',
+      icon: { type: 'image', value: '/emojis/custom.svg' },
+      thumbnailUrl: 'assets/missing.png',
+    };
+
+    render(
+      <RecentDocsCard
+        activeTab="modified"
+        onChangeTab={vi.fn()}
+        items={[docWithImgIcon]}
+        hasMore={false}
+        loading={false}
+        hideDailyNotes={false}
+        onToggleHideDailyNotes={vi.fn()}
+        notebookId="all"
+        notebooks={[]}
+        onChangeNotebook={vi.fn()}
+        keyword=""
+        onChangeKeyword={vi.fn()}
+        onLoadMore={vi.fn()}
+        onOpenDoc={vi.fn()}
+      />,
+    );
+
+    const imgs = document.querySelectorAll('img');
+    expect(imgs).toHaveLength(2); // icon img + thumbnail img
+    fireEvent.error(screen.getByAltText('自定义图标笔记'));
+    expect(screen.queryByAltText('自定义图标笔记')).toBeNull();
+    expect(document.querySelectorAll('img')).toHaveLength(1);
+  });
 });

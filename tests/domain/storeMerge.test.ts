@@ -176,5 +176,46 @@ describe('storeMerge', () => {
       recentReads: { version: 1, records: [] },
     });
     expect(valid.plugin).toBe('siyuan-personal-home');
+
+    // Rejects malformed elements inside arrays
+    expect(() =>
+      validateBackupBundle({
+        version: 1,
+        exportedAt: '2026-11-22T00:00:00.000Z',
+        plugin: 'siyuan-personal-home',
+        settings: DEFAULT_SETTINGS,
+        tasks: { version: 1, categories: DEFAULT_TASK_CATEGORIES, tasks: [null] },
+        habits: { version: 1, habits: [], checkins: {} },
+        recentReads: { version: 1, records: [] },
+      }),
+    ).toThrow();
+  });
+
+  it('prunes orphaned checkins when a deleted habit tombstone is garbage collected', () => {
+    const now = 100 * 86_400_000;
+    const oldDeletedHabit = {
+      id: 'h-gc',
+      name: '旧习惯',
+      icon: '✨',
+      color: '#3b82f6',
+      frequencyType: 'daily' as const,
+      weeklyTarget: 7,
+      trackDuration: false,
+      createdAt: '2026-01-01',
+      archived: false,
+      deleted: true,
+      sortOrder: 0,
+      updatedAt: now - TOMBSTONE_TTL_MS - 1000,
+    };
+    const store: HabitsStore = {
+      version: 1,
+      habits: [oldDeletedHabit],
+      checkins: {
+        'h-gc': { '2026-01-02': { done: true, checkedAt: 1, updatedAt: 1 } },
+      },
+    };
+    const merged = mergeHabitsStore(store, store, now);
+    expect(merged.habits).toHaveLength(0);
+    expect(merged.checkins['h-gc']).toBeUndefined();
   });
 });

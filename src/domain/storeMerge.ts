@@ -48,6 +48,7 @@ export function mergeHabitsStore(
   nowMs: number,
 ): HabitsStore {
   const habits = mergeEntities(local.habits, disk.habits, nowMs);
+  const survivingHabitIds = new Set(habits.map((h) => h.id));
   const allHabitIds = new Set<string>([
     ...Object.keys(disk.checkins ?? {}),
     ...Object.keys(local.checkins ?? {}),
@@ -55,6 +56,7 @@ export function mergeHabitsStore(
 
   const mergedCheckins: Record<string, Record<string, HabitCheckin>> = {};
   for (const habitId of allHabitIds) {
+    if (!survivingHabitIds.has(habitId)) continue;
     const diskMap = disk.checkins?.[habitId] ?? {};
     const localMap = local.checkins?.[habitId] ?? {};
     const dateKeys = new Set([...Object.keys(diskMap), ...Object.keys(localMap)]);
@@ -131,6 +133,16 @@ export function normalizeTasksStore(raw: unknown): TasksStore {
   if (!isPlainObject(raw) || !Array.isArray(raw.tasks) || !Array.isArray(raw.categories)) {
     throw new Error('tasks.json 数据格式损坏，已拒绝覆盖原文件');
   }
+  for (const item of raw.tasks) {
+    if (!isPlainObject(item) || typeof item.id !== 'string' || typeof item.title !== 'string') {
+      throw new Error('tasks.json 包含非法任务条目，已拒绝覆盖原文件');
+    }
+  }
+  for (const cat of raw.categories) {
+    if (!isPlainObject(cat) || typeof cat.id !== 'string' || typeof cat.name !== 'string') {
+      throw new Error('tasks.json 包含非法维度条目，已拒绝覆盖原文件');
+    }
+  }
   return {
     version: 1,
     categories: raw.categories.length > 0
@@ -147,6 +159,11 @@ export function normalizeHabitsStore(raw: unknown): HabitsStore {
   if (!isPlainObject(raw) || !Array.isArray(raw.habits) || !isPlainObject(raw.checkins)) {
     throw new Error('habits.json 数据格式损坏，已拒绝覆盖原文件');
   }
+  for (const habit of raw.habits) {
+    if (!isPlainObject(habit) || typeof habit.id !== 'string' || typeof habit.name !== 'string') {
+      throw new Error('habits.json 包含非法习惯条目，已拒绝覆盖原文件');
+    }
+  }
   return {
     version: 1,
     habits: raw.habits,
@@ -160,6 +177,11 @@ export function normalizeRecentReadsStore(raw: unknown): RecentReadsStore {
   }
   if (!isPlainObject(raw) || !Array.isArray(raw.records)) {
     throw new Error('recent-reads.json 数据格式损坏，已拒绝覆盖原文件');
+  }
+  for (const rec of raw.records) {
+    if (!isPlainObject(rec) || typeof rec.docId !== 'string') {
+      throw new Error('recent-reads.json 包含非法阅读记录，已拒绝覆盖原文件');
+    }
   }
   return {
     version: 1,

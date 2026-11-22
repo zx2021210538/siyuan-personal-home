@@ -30,6 +30,9 @@ describe('docPreview', () => {
     expect(
       extractTitleImageUrl('{: title-img="background-color:#222222"}'),
     ).toBeNull();
+    expect(
+      extractTitleImageUrl('{: title-img="background-image:url(data:image/svg+xml;utf8,<svg/>)"}'),
+    ).toBeNull();
     expect(extractTitleImageUrl(null)).toBeNull();
     expect(extractTitleImageUrl('broken-ial-without-braces')).toBeNull();
   });
