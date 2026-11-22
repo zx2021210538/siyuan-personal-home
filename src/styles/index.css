@@ -63,24 +63,24 @@
     font-family: var(--sph-font-ui);
   }
 
-  .sph-root *,
-  .sph-root *::before,
-  .sph-root *::after {
+  .sph-root *:not(.sph-protyle-host):not(.sph-protyle-host *),
+  .sph-root *:not(.sph-protyle-host):not(.sph-protyle-host *)::before,
+  .sph-root *:not(.sph-protyle-host):not(.sph-protyle-host *)::after {
     box-sizing: border-box;
     border-width: 0;
     border-style: solid;
     border-color: var(--sph-hairline);
   }
 
-  .sph-root h1,
-  .sph-root h2,
-  .sph-root h3,
-  .sph-root p {
+  .sph-root h1:not(.sph-protyle-host *),
+  .sph-root h2:not(.sph-protyle-host *),
+  .sph-root h3:not(.sph-protyle-host *),
+  .sph-root p:not(.sph-protyle-host *) {
     margin: 0;
     font-weight: inherit;
   }
 
-  .sph-root button {
+  .sph-root button:not(.sph-protyle-host *) {
     appearance: none;
     background: transparent;
     border: 0;
@@ -92,24 +92,24 @@
     line-height: inherit;
   }
 
-  .sph-root button:disabled {
+  .sph-root button:not(.sph-protyle-host *):disabled {
     cursor: not-allowed;
   }
 
-  .sph-root input,
-  .sph-root select {
+  .sph-root input:not(.sph-protyle-host *),
+  .sph-root select:not(.sph-protyle-host *) {
     font: inherit;
     color: inherit;
     margin: 0;
   }
 
-  .sph-root img,
-  .sph-root svg {
+  .sph-root img:not(.sph-protyle-host *),
+  .sph-root svg:not(.sph-protyle-host *) {
     display: block;
     vertical-align: middle;
   }
 
-  .sph-root svg.lucide {
+  .sph-root svg.lucide:not(.sph-protyle-host *) {
     fill: none;
   }
 
@@ -629,5 +629,65 @@
 
   .sph-switch input:checked + .sph-switch-track .sph-switch-thumb {
     transform: translateX(15px);
+  }
+
+  /* Native embedded read-only SiYuan Protyle preview host */
+  .sph-protyle-host {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid var(--sph-hairline);
+    background-color: var(--b3-theme-background, var(--sph-card));
+    color: var(--b3-theme-on-background, var(--sph-text));
+    font-family: var(--b3-font-family-protyle, var(--b3-font-family, var(--sph-font-ui)));
+    font-size: initial;
+    line-height: normal;
+    text-align: left;
+    cursor: default;
+    box-sizing: border-box;
+  }
+
+  .sph-protyle-mount {
+    width: 100%;
+    height: 100%;
+  }
+
+  .sph-protyle-host .protyle {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    background-color: transparent;
+  }
+
+  .sph-protyle-host .protyle-content {
+    height: 100%;
+    overflow: auto;
+  }
+
+  .sph-protyle-host .protyle-wysiwyg {
+    padding: 14px 18px 24px !important;
+    min-height: 0 !important;
+  }
+
+  .sph-protyle-host .protyle-toolbar,
+  .sph-protyle-host .protyle-gutters,
+  .sph-protyle-host .protyle-hint,
+  .sph-protyle-host .protyle-util {
+    display: none !important;
+  }
+
+  .sph-protyle-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12.5px;
+    font-family: var(--sph-font-ui);
+    color: var(--sph-muted);
+    background-color: color-mix(in srgb, var(--sph-card) 86%, transparent);
+    pointer-events: none;
+    z-index: 1;
   }
 }

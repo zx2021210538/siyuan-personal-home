@@ -5,8 +5,7 @@ import {
   parseSiYuanTimestamp,
   parseTags,
 } from '../domain/docPreview';
-import { extractLifeLogConfig, parseLifeLogMomentsForDate } from '../domain/lifelogParser';
-import type { DiaryMoment, DocPreviewItem, MonthCalendarDay } from '../domain/types';
+import type { DocPreviewItem, MonthCalendarDay } from '../domain/types';
 import { escapeSqlString, type SiYuanClient, type SiYuanNotebook } from './siyuanApi';
 
 const IMAGE_ASSET_REGEX = /\.(png|jpe?g|webp|gif|avif|svg)$/i;
@@ -91,7 +90,7 @@ export async function fetchDailyNoteByDate(
   if (!docId) return null;
 
   const safeDocId = escapeSqlString(docId);
-  const [docRows, bodyRows, wordRows, assetRows, htmlRows] = await Promise.all([
+  const [docRows, bodyRows, wordRows, assetRows] = await Promise.all([
     api.sql<{
       id: string;
       box: string;
@@ -110,9 +109,6 @@ export async function fetchDailyNoteByDate(
     api.sql<{ path: string }>(
       `SELECT path FROM assets WHERE root_id = '${safeDocId}' LIMIT 10`,
     ),
-    api.sql<{ markdown: string; content: string }>(
-      `SELECT markdown, content FROM blocks WHERE root_id = '${safeDocId}' AND type = 'html' LIMIT 4`,
-    ),
   ]);
 
   const doc = docRows[0];
@@ -120,47 +116,11 @@ export async function fetchDailyNoteByDate(
 
   const titleImg = extractTitleImageUrl(doc.ial);
   const assetImg = assetRows.find((a) => IMAGE_ASSET_REGEX.test(a.path))?.path ?? null;
-  let wordCount = Number(wordRows[0]?.totalWords ?? 0);
-  let snippet = cleanSnippetMarkdown(
+  const wordCount = Number(wordRows[0]?.totalWords ?? 0);
+  const snippet = cleanSnippetMarkdown(
     bodyRows.map((b) => b.markdown || b.content || ''),
     320,
   );
-  let moments: DiaryMoment[] | undefined;
-  let momentThumb: string | null = null;
-
-  // Detect embedded LifeLog-style HTML database widgets and render their day's real entries
-  const lifeLogCfg = htmlRows
-    .map((h) => extractLifeLogConfig(h.markdown || h.content))
-    .find((cfg) => cfg !== null);
-
-  if (lifeLogCfg && api.renderAttributeView) {
-    try {
-      const avData = await api.renderAttributeView({
-        id: lifeLogCfg.avId,
-        blockID: lifeLogCfg.dbBlockId,
-        viewID: lifeLogCfg.viewId,
-        page: 1,
-        pageSize: 200,
-      });
-      moments = parseLifeLogMomentsForDate(avData, lifeLogCfg, dateStr);
-      const momentsWordCount = moments.reduce(
-        (sum, m) => sum + m.title.length + m.text.replace(/\s+/g, '').length,
-        0,
-      );
-      if (moments.length > 0) {
-        wordCount = momentsWordCount;
-        snippet = moments
-          .map((m) => [m.title, m.text].filter(Boolean).join('：'))
-          .join(' · ')
-          .slice(0, 320);
-        momentThumb = moments.find((m) => m.images.length > 0)?.images[0] ?? null;
-      } else {
-        snippet = '';
-      }
-    } catch {
-      // Fallback gracefully to regular paragraph snippet if AV query fails
-    }
-  }
 
   return {
     id: doc.id,
@@ -170,11 +130,10 @@ export async function fetchDailyNoteByDate(
     title: doc.content || dateStr,
     icon: extractDocIcon(doc.ial),
     snippet,
-    thumbnailUrl: titleImg || assetImg || momentThumb,
+    thumbnailUrl: titleImg || assetImg,
     tags: parseTags(doc.tag),
     updatedAtMs: parseSiYuanTimestamp(doc.updated),
     wordCount,
-    moments,
   };
 }
 

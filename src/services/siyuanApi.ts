@@ -32,13 +32,6 @@ export interface SiYuanClient {
   getLocalStorage(): Promise<Record<string, unknown>>;
   setLocalStorageVal(key: string, val: unknown): Promise<void>;
   getEditorFontFamily?(): Promise<string>;
-  renderAttributeView?(params: {
-    id: string;
-    blockID?: string;
-    viewID?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<unknown>;
   searchDocs(keyword: string): Promise<SearchDocHit[]>;
 }
 
@@ -169,19 +162,6 @@ export function createSiYuanClient(): SiYuanClient {
       } catch {
         return '';
       }
-    },
-
-    async renderAttributeView(params): Promise<unknown> {
-      return postApi('/api/av/renderAttributeView', {
-        id: params.id,
-        blockID: params.blockID ?? '',
-        viewID: params.viewID ?? '',
-        page: params.page ?? 1,
-        pageSize: params.pageSize ?? 200,
-        query: '',
-        createIfNotExist: false,
-        persistView: false,
-      });
     },
 
     async searchDocs(keyword: string): Promise<SearchDocHit[]> {

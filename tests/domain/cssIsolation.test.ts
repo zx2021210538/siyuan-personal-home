@@ -58,4 +58,13 @@ describe('CSS isolation (no global Tailwind Preflight leak & unlayered SiYuan ho
     expect(match).not.toBeNull();
     expect(Number(match?.[1])).toBeLessThanOrEqual(5);
   });
+
+  it('excludes embedded native .sph-protyle-host subtrees from plugin base CSS resets', () => {
+    const cssPath = path.resolve(__dirname, '../../src/styles/index.css');
+    const content = fs.readFileSync(cssPath, 'utf8');
+    expect(content).toContain('.sph-root *:not(.sph-protyle-host):not(.sph-protyle-host *)');
+    expect(content).toContain('.sph-root img:not(.sph-protyle-host *)');
+    expect(content).toContain('.sph-root button:not(.sph-protyle-host *)');
+    expect(content).toContain('.sph-protyle-host');
+  });
 });

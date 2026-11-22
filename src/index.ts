@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { Plugin, openTab } from 'siyuan';
+import { Plugin, Protyle, openTab } from 'siyuan';
 import { DEFAULT_SETTINGS, type PluginSettings } from './domain/types';
 import { HomePage } from './pages/HomePage';
 import { RecentReadTracker } from './services/recentDocsService';
@@ -97,6 +97,38 @@ export default class PersonalHomePlugin extends Plugin {
                 app: plugin.app,
                 doc: { id: docId },
               });
+            },
+            mountProtyle: (hostEl: HTMLElement, docId: string, onReady: () => void) => {
+              const instance = new Protyle(plugin.app, hostEl, {
+                blockId: docId,
+                rootId: docId,
+                action: ['cb-get-all', 'cb-get-unundo'],
+                render: {
+                  background: false,
+                  title: false,
+                  gutter: false,
+                  scroll: false,
+                  breadcrumb: false,
+                  breadcrumbDocName: false,
+                },
+                click: {
+                  preventInsetEmptyBlock: true,
+                },
+                after: (protyle) => {
+                  try {
+                    protyle.disable();
+                  } catch {
+                    // ignore if destroyed before async load finished
+                  }
+                  onReady();
+                },
+              });
+              try {
+                instance.disable();
+              } catch {
+                // ignore
+              }
+              return instance;
             },
             subscribeSyncRefresh: (cb: () => void) => {
               plugin.syncListeners.add(cb);

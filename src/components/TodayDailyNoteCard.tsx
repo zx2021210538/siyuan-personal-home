@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowUpRight, PenLine } from 'lucide-react';
+import { ArrowUpRight, Eye, PenLine } from 'lucide-react';
 import { formatRelativeTime } from '../domain/docPreview';
-import type { DiaryMoment, DocPreviewItem } from '../domain/types';
+import type { DocPreviewItem } from '../domain/types';
+import { ReadOnlyProtyleView, type ProtyleMountFn } from './ReadOnlyProtyleView';
 
 export interface TodayDailyNoteCardProps {
   todayStr: string;
@@ -10,6 +11,8 @@ export interface TodayDailyNoteCardProps {
   heading?: string;
   createLabel?: string;
   expanded?: boolean;
+  mountProtyle?: ProtyleMountFn;
+  refreshNonce?: number;
   onOpenDoc: (docId: string) => void;
   onCreateToday: () => void;
 }
@@ -23,28 +26,6 @@ function formatWeekday(dateStr: string): string {
   return WEEKDAYS[dt.getDay()] ?? '';
 }
 
-const FallbackStickerImg: React.FC<{
-  candidates: string[];
-  alt: string;
-  compact?: boolean;
-}> = ({ candidates, alt, compact = false }) => {
-  const [idx, setIdx] = useState(0);
-  if (idx >= candidates.length) return null;
-  return (
-    <img
-      src={candidates[idx]}
-      alt={alt}
-      loading="lazy"
-      onError={() => setIdx((prev) => prev + 1)}
-      className={
-        compact
-          ? 'h-12 w-12 rounded-lg object-contain shrink-0'
-          : 'max-h-28 max-w-[130px] rounded-xl object-contain shrink-0'
-      }
-    />
-  );
-};
-
 export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
   todayStr,
   dailyNote,
@@ -52,30 +33,19 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
   heading = '今日日记',
   createLabel = '写今天的日记',
   expanded = false,
+  mountProtyle,
+  refreshNonce = 0,
   onOpenDoc,
   onCreateToday,
 }) => {
   const weekday = formatWeekday(todayStr);
   const monthIdx = Math.max(0, Math.min(11, Number(todayStr.slice(5, 7)) - 1));
   const dayNum = Number(todayStr.slice(8, 10));
-  const [thumbFailed, setThumbFailed] = useState(false);
   const [iconFailed, setIconFailed] = useState(false);
-  const [failedMomentImgKeys, setFailedMomentImgKeys] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    setThumbFailed(false);
     setIconFailed(false);
-    setFailedMomentImgKeys(new Set());
-  }, [dailyNote?.id, dailyNote?.thumbnailUrl]);
-
-  const moments = dailyNote?.moments;
-  const hasMomentsMode = Array.isArray(moments);
-  const visibleMoments: DiaryMoment[] = hasMomentsMode
-    ? expanded
-      ? moments
-      : moments.slice(0, 2)
-    : [];
-  const hiddenMomentsCount = hasMomentsMode ? Math.max(0, moments.length - visibleMoments.length) : 0;
+  }, [dailyNote?.id]);
 
   return (
     <section className="flex flex-col gap-3 h-full">
@@ -109,34 +79,31 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
       ) : dailyNote ? (
         <div
           data-testid="today-daily-note-card"
-          role="button"
-          tabIndex={0}
-          onClick={() => onOpenDoc(dailyNote.id)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onOpenDoc(dailyNote.id);
-            }
-          }}
-          className="sph-doc-card p-5 sm:p-6 flex gap-5 cursor-pointer flex-1"
+          className="sph-panel p-4 sm:p-5 flex flex-col gap-3.5 flex-1 min-w-0"
         >
-          <div className="sph-date-rail w-[74px] shrink-0 py-3 px-2 flex flex-col items-center justify-center self-start select-none">
-            <span className="text-[11px] font-medium" style={{ color: 'var(--sph-accent)' }}>
-              {CN_MONTHS[monthIdx]}
-            </span>
-            <span className="sph-num-font text-[30px] font-semibold leading-none mt-1.5">
-              {dayNum}
-            </span>
-            <span className="text-[10.5px] mt-1.5" style={{ color: 'var(--sph-subtle)' }}>
-              {weekday}
-            </span>
-          </div>
+          {/* Compact header bar: date badge + clickable title + read-only indicator */}
+          <div className="flex items-center justify-between gap-3 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className="sph-card px-2.5 py-1.5 flex items-baseline gap-1 shrink-0 select-none"
+                style={{ borderRadius: '10px' }}
+              >
+                <span className="text-[11px] font-medium" style={{ color: 'var(--sph-accent)' }}>
+                  {CN_MONTHS[monthIdx]}
+                </span>
+                <span className="sph-num-font text-[18px] font-semibold leading-none">
+                  {dayNum}
+                </span>
+              </div>
 
-          <div className="min-w-0 flex-1 flex flex-col justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 font-medium text-[17px] leading-snug">
+              <button
+                type="button"
+                onClick={() => onOpenDoc(dailyNote.id)}
+                className="flex items-center gap-2 font-medium text-[16px] leading-snug min-w-0 text-left hover:opacity-80 transition-opacity"
+                title="点击打开原日记进行编辑"
+              >
                 {dailyNote.icon?.type === 'emoji' ? (
-                  <span>{dailyNote.icon.value}</span>
+                  <span className="shrink-0">{dailyNote.icon.value}</span>
                 ) : dailyNote.icon?.type === 'image' && !iconFailed ? (
                   <img
                     src={dailyNote.icon.value}
@@ -146,191 +113,60 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
                   />
                 ) : null}
                 <span className="truncate">{dailyNote.title}</span>
-              </div>
-
-              {hasMomentsMode ? (
-                visibleMoments.length > 0 ? (
-                  <div
-                    className={`mt-3 flex flex-col gap-3 ${
-                      expanded ? 'max-h-[380px] overflow-y-auto pr-1.5' : ''
-                    }`}
-                  >
-                    {visibleMoments.map((m) => {
-                      const iconKey = `icon:${m.id}`;
-                      const validImgs = m.images.filter(
-                        (_, idx) => !failedMomentImgKeys.has(`img:${m.id}:${idx}`),
-                      );
-                      return (
-                        <div
-                          key={m.id}
-                          className="rounded-xl px-3.5 py-2.5 flex flex-col gap-1.5"
-                          style={{
-                            backgroundColor: 'var(--sph-card)',
-                            border: '1px solid var(--sph-hairline)',
-                          }}
-                        >
-                          <div className="flex items-center flex-wrap gap-2 text-xs">
-                            {m.period && (
-                              <span
-                                className="px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0"
-                                style={{
-                                  backgroundColor: 'var(--sph-accent-soft)',
-                                  color: 'var(--sph-accent)',
-                                }}
-                              >
-                                {m.period}
-                              </span>
-                            )}
-                            {m.time && (
-                              <span
-                                className="sph-num-font text-[11px] shrink-0"
-                                style={{ color: 'var(--sph-subtle)' }}
-                              >
-                                {m.time}
-                              </span>
-                            )}
-                            <span className="inline-flex items-center gap-1.5 font-medium text-[13.5px] min-w-0">
-                              {m.icon?.type === 'emoji' ? (
-                                <span className="shrink-0">{m.icon.value}</span>
-                              ) : m.icon?.type === 'image' && !failedMomentImgKeys.has(iconKey) ? (
-                                <img
-                                  src={m.icon.value}
-                                  alt=""
-                                  className="w-3.5 h-3.5 rounded-sm object-contain shrink-0"
-                                  onError={() =>
-                                    setFailedMomentImgKeys((prev) => new Set(prev).add(iconKey))
-                                  }
-                                />
-                              ) : null}
-                              <span className="truncate">{m.title}</span>
-                            </span>
-                          </div>
-
-                          {m.text && (
-                            <p
-                              className={`text-[13.5px] leading-[1.75] ${
-                                expanded ? 'whitespace-pre-line' : 'sph-line-clamp-2'
-                              }`}
-                              style={{ color: 'var(--sph-muted)' }}
-                            >
-                              {m.text}
-                            </p>
-                          )}
-
-                          {((expanded && (validImgs.length > 0 || (m.stickers && m.stickers.length > 0))) ||
-                            (!expanded && (validImgs.length > 0 || (m.stickers && m.stickers.length > 0)))) && (
-                            <div className="flex flex-wrap items-end gap-2.5 pt-1">
-                              {m.images.slice(0, expanded ? 6 : 2).map((src, idx) => {
-                                const imgKey = `img:${m.id}:${idx}`;
-                                if (failedMomentImgKeys.has(imgKey)) return null;
-                                return (
-                                  <div
-                                    key={imgKey}
-                                    className={
-                                      expanded
-                                        ? 'w-28 h-24 rounded-xl overflow-hidden shrink-0'
-                                        : 'w-16 h-12 rounded-lg overflow-hidden shrink-0'
-                                    }
-                                    style={{ border: '1px solid var(--sph-hairline)' }}
-                                  >
-                                    <img
-                                      src={src}
-                                      alt={m.title}
-                                      loading="lazy"
-                                      onError={() =>
-                                        setFailedMomentImgKeys((prev) => new Set(prev).add(imgKey))
-                                      }
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </div>
-                                );
-                              })}
-                              {(m.stickers ?? []).slice(0, expanded ? 4 : 1).map((st) => (
-                                <FallbackStickerImg
-                                  key={`${m.id}:${st.code}`}
-                                  candidates={st.candidates}
-                                  alt={st.code}
-                                  compact={!expanded}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {hiddenMomentsCount > 0 && (
-                      <div className="text-xs pl-1" style={{ color: 'var(--sph-subtle)' }}>
-                        + 还有 {hiddenMomentsCount} 条记录片段，点击查看完整日记…
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p
-                    className="text-[14px] mt-3 leading-[1.8]"
-                    style={{ color: 'var(--sph-muted)' }}
-                  >
-                    这一天的日记还没有记录片段，点击这里进入编辑记录此刻…
-                  </p>
-                )
-              ) : (
-                <p
-                  className={`text-[14.5px] mt-2.5 leading-[1.85] ${
-                    expanded ? 'sph-line-clamp-5' : 'sph-line-clamp-3'
-                  }`}
-                  style={{ color: 'var(--sph-muted)' }}
-                >
-                  {dailyNote.snippet || '日记已建好，点击这里提笔记录此刻的想法与见闻…'}
-                </p>
-              )}
+              </button>
             </div>
 
-            <div
-              className="flex items-center flex-wrap gap-2 text-xs pt-3"
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] shrink-0 select-none"
               style={{
+                backgroundColor: 'var(--sph-card)',
+                border: '1px solid var(--sph-hairline)',
                 color: 'var(--sph-subtle)',
-                borderTop: '1px solid var(--sph-hairline)',
               }}
             >
-              {dailyNote.notebookName && <span>{dailyNote.notebookName}</span>}
-              {hasMomentsMode && moments.length > 0 && (
-                <span className="sph-num-font">· {moments.length} 条片段</span>
-              )}
-              {typeof dailyNote.wordCount === 'number' && dailyNote.wordCount > 0 && (
-                <span className="sph-num-font">· {dailyNote.wordCount} 字</span>
-              )}
-              {dailyNote.updatedAtMs > 0 && (
-                <span>· {formatRelativeTime(dailyNote.updatedAtMs, Date.now())}更新</span>
-              )}
-              {expanded &&
-                dailyNote.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-2 py-0.5 rounded-full text-[11px]"
-                    style={{
-                      backgroundColor: 'var(--sph-accent-soft)',
-                      color: 'var(--sph-accent)',
-                    }}
-                  >
-                    #{tag}
-                  </span>
-                ))}
-            </div>
+              <Eye size={11} />
+              <span>只读预览</span>
+            </span>
           </div>
 
-          {!hasMomentsMode && dailyNote.thumbnailUrl && !thumbFailed && (
-            <div
-              className="w-32 h-24 rounded-xl overflow-hidden shrink-0 self-center"
-              style={{ border: '1px solid var(--sph-hairline)' }}
-            >
-              <img
-                src={dailyNote.thumbnailUrl}
-                alt={dailyNote.title}
-                onError={() => setThumbFailed(true)}
-                className="sph-doc-thumb w-full h-full object-cover"
-              />
-            </div>
-          )}
+          {/* Native SiYuan Protyle read-only preview */}
+          <ReadOnlyProtyleView
+            docId={dailyNote.id}
+            mountProtyle={mountProtyle}
+            fallbackSnippet={dailyNote.snippet}
+            refreshNonce={refreshNonce}
+            heightClass={expanded ? 'h-[560px]' : 'h-[350px]'}
+          />
+
+          {/* Footer metadata */}
+          <div
+            className="flex items-center flex-wrap gap-2 text-xs pt-2.5"
+            style={{
+              color: 'var(--sph-subtle)',
+              borderTop: '1px solid var(--sph-hairline)',
+            }}
+          >
+            {dailyNote.notebookName && <span>{dailyNote.notebookName}</span>}
+            {typeof dailyNote.wordCount === 'number' && dailyNote.wordCount > 0 && (
+              <span className="sph-num-font">· {dailyNote.wordCount} 字</span>
+            )}
+            {dailyNote.updatedAtMs > 0 && (
+              <span>· {formatRelativeTime(dailyNote.updatedAtMs, Date.now())}更新</span>
+            )}
+            {expanded &&
+              dailyNote.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2 py-0.5 rounded-full text-[11px]"
+                  style={{
+                    backgroundColor: 'var(--sph-accent-soft)',
+                    color: 'var(--sph-accent)',
+                  }}
+                >
+                  #{tag}
+                </span>
+              ))}
+          </div>
         </div>
       ) : (
         <div className="sph-panel px-6 py-7 flex flex-wrap items-center justify-between gap-5 flex-1">

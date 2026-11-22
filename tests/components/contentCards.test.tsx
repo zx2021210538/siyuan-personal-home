@@ -68,15 +68,30 @@ describe('Content Cards (Task 7)', () => {
     expect(onClickDate).toHaveBeenCalledWith('2026-01-01');
   });
 
-  it('TodayDailyNoteCard renders empty state with create action or preview card with open action', () => {
+  it('TodayDailyNoteCard renders empty state, mounts read-only Protyle, destroys on switch/unmount, and opens doc via title/button', () => {
     const onOpenDoc = vi.fn();
     const onCreateToday = vi.fn();
+    const destroyFirst = vi.fn();
+    const disableFirst = vi.fn();
+    const destroySecond = vi.fn();
+    const disableSecond = vi.fn();
+    const mountProtyle = vi.fn((container: HTMLElement, docId: string, onReady: () => void) => {
+      const mockEl = document.createElement('div');
+      mockEl.className = 'protyle';
+      mockEl.textContent = `原生渲染:${docId}`;
+      container.appendChild(mockEl);
+      onReady();
+      return docId === 'doc-1'
+        ? { disable: disableFirst, destroy: destroyFirst }
+        : { disable: disableSecond, destroy: destroySecond };
+    });
 
-    const { rerender } = render(
+    const { rerender, unmount } = render(
       <TodayDailyNoteCard
         todayStr="2026-11-22"
         dailyNote={null}
         loading={false}
+        mountProtyle={mountProtyle}
         onOpenDoc={onOpenDoc}
         onCreateToday={onCreateToday}
       />,
@@ -90,44 +105,59 @@ describe('Content Cards (Task 7)', () => {
         todayStr="2026-11-22"
         dailyNote={SAMPLE_DOC}
         loading={false}
+        mountProtyle={mountProtyle}
         onOpenDoc={onOpenDoc}
         onCreateToday={onCreateToday}
       />,
     );
 
-    expect(screen.getByText('React 19 架构笔记')).toBeInTheDocument();
+    expect(mountProtyle).toHaveBeenCalledWith(expect.any(HTMLElement), 'doc-1', expect.any(Function));
+    expect(screen.getByText('原生渲染:doc-1')).toBeInTheDocument();
+    expect(screen.getByText('只读预览')).toBeInTheDocument();
     expect(screen.getByText(/420 字/)).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('today-daily-note-card'));
+    expect(disableFirst).toHaveBeenCalled();
+
+    // Clicking inside the read-only Protyle viewport must NOT accidentally navigate away
+    fireEvent.click(screen.getByTestId('readonly-protyle-view'));
+    expect(onOpenDoc).not.toHaveBeenCalled();
+
+    // Clicking the title or "进入编辑" button opens the document for editing
+    fireEvent.click(screen.getByRole('button', { name: /React 19 架构笔记/ }));
     expect(onOpenDoc).toHaveBeenCalledWith('doc-1');
 
-    // Structured LifeLog moments rendering
+    // Switching to another diary date destroys previous Protyle instance and mounts new one
     rerender(
       <TodayDailyNoteCard
         expanded
         todayStr="2026-11-10"
-        dailyNote={{
-          ...SAMPLE_DOC,
-          title: '2026-11-10',
-          wordCount: 120,
-          moments: [
-            {
-              id: 'm1',
-              title: '上午例会',
-              period: '上午',
-              time: '09:00–11:30',
-              text: '汇报顺利完成。',
-              images: [],
-            },
-          ],
-        }}
+        dailyNote={{ ...SAMPLE_DOC, id: 'doc-2', title: '2026-11-10' }}
         loading={false}
+        mountProtyle={mountProtyle}
         onOpenDoc={onOpenDoc}
         onCreateToday={onCreateToday}
       />,
     );
-    expect(screen.getByText('上午例会')).toBeInTheDocument();
-    expect(screen.getByText('汇报顺利完成。')).toBeInTheDocument();
-    expect(screen.getByText(/1 条片段/)).toBeInTheDocument();
+    expect(destroyFirst).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('原生渲染:doc-2')).toBeInTheDocument();
+
+    // Unmounting cleans up active Protyle instance
+    unmount();
+    expect(destroySecond).toHaveBeenCalledTimes(1);
+  });
+
+  it('TodayDailyNoteCard falls back gracefully to snippet when mountProtyle is absent', () => {
+    render(
+      <TodayDailyNoteCard
+        todayStr="2026-11-22"
+        dailyNote={SAMPLE_DOC}
+        loading={false}
+        onOpenDoc={vi.fn()}
+        onCreateToday={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('readonly-protyle-fallback')).toHaveTextContent(
+      '这是一段清洗后的笔记正文摘要预览。',
+    );
   });
 
   it('RecentDocsCard switches tabs, hides thumbnails when absent, renders cold-start copy, and loads more', () => {

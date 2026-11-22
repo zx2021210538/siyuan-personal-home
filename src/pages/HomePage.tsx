@@ -20,6 +20,7 @@ import { StatsHeatmapCard } from '../components/StatsHeatmapCard';
 import { TaskCard } from '../components/TaskCard';
 import { ThemeStudioModal } from '../components/ThemeStudioModal';
 import { TodayDailyNoteCard } from '../components/TodayDailyNoteCard';
+import type { ProtyleMountFn } from '../components/ReadOnlyProtyleView';
 import { formatRelativeTime } from '../domain/docPreview';
 import { buildThemeCssVars, DEFAULT_THEME_ID, resolveActiveTheme } from '../domain/themes';
 import { getActiveTasks, moveItemOrder, sortTasksByPriority } from '../domain/taskLogic';
@@ -68,6 +69,7 @@ export interface HomePageProps {
   api: SiYuanClient;
   storage: StorageService;
   openDoc: (docId: string) => void;
+  mountProtyle?: ProtyleMountFn;
   subscribeSyncRefresh?: (cb: () => void) => () => void;
   todayOverride?: string;
   initialSubTab?: HomeSubTab;
@@ -119,6 +121,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   api,
   storage,
   openDoc,
+  mountProtyle,
   subscribeSyncRefresh,
   todayOverride,
   initialSubTab = 'overview',
@@ -193,6 +196,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   >(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [protyleRefreshNonce, setProtyleRefreshNonce] = useState<number>(0);
 
   const recentReqIdRef = useRef(0);
   const diaryReqIdRef = useRef(0);
@@ -410,6 +414,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         ),
         resolveHiddenIdLabels(api, nbs, loadedSettings.hiddenRecentIds ?? []).then(setHiddenIdLabels),
       ]);
+      setProtyleRefreshNonce((n) => n + 1);
     } catch (err) {
       reportError(err, '加载个人主页数据时发生错误');
     } finally {
@@ -1203,6 +1208,8 @@ export const HomePage: React.FC<HomePageProps> = ({
                     todayStr={todayStr}
                     dailyNote={todayDailyNote}
                     loading={todayLoading}
+                    mountProtyle={mountProtyle}
+                    refreshNonce={protyleRefreshNonce}
                     onOpenDoc={openDoc}
                     onCreateToday={() => void handleClickDiaryDate(todayStr)}
                   />
@@ -1471,7 +1478,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             <header className="flex flex-col gap-1">
               <h1 className="text-[28px] font-medium tracking-[0.03em] leading-tight">日记与日历</h1>
               <p className="text-[13.5px]" style={{ color: 'var(--sph-muted)' }}>
-                点选日历任意一天即可翻阅当日日记摘录，或一键按模板新建日记
+                点选日历任意一天即可原样预览当日日记，或一键按模板新建日记
               </p>
             </header>
 
@@ -1507,6 +1514,8 @@ export const HomePage: React.FC<HomePageProps> = ({
                   selectedJournalDate === todayStr ? todayDailyNote : selectedJournalNote
                 }
                 loading={selectedJournalDate === todayStr ? todayLoading : selectedJournalLoading}
+                mountProtyle={mountProtyle}
+                refreshNonce={protyleRefreshNonce}
                 onOpenDoc={openDoc}
                 onCreateToday={() => void handleClickDiaryDate(selectedJournalDate)}
               />
