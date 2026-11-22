@@ -33,7 +33,7 @@ export async function fetchOverviewStats(
   const [docRows, wordRows, recentRows, diaryRows] = await Promise.all([
     api.sql<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM blocks WHERE type = 'd'`),
     api.sql<{ totalWords: number | null; totalBlocks: number }>(
-      `SELECT COALESCE(SUM(length), 0) AS totalWords, COUNT(*) AS totalBlocks FROM blocks WHERE type IN ('p','h','c','m','t','html','callout')`,
+      `SELECT COALESCE(SUM(length), 0) AS totalWords, COUNT(*) AS totalBlocks FROM blocks WHERE type IN ('p','h','c','m','t','callout')`,
     ),
     api.sql<{ cnt: number }>(
       `SELECT COUNT(*) AS cnt FROM blocks WHERE type = 'd' AND updated >= '${sevenDaysAgo}'`,

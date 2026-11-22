@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowUpRight, PenLine } from 'lucide-react';
 import { formatRelativeTime } from '../domain/docPreview';
-import type { DocPreviewItem } from '../domain/types';
+import type { DiaryMoment, DocPreviewItem } from '../domain/types';
 
 export interface TodayDailyNoteCardProps {
   todayStr: string;
@@ -38,11 +38,22 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
   const dayNum = Number(todayStr.slice(8, 10));
   const [thumbFailed, setThumbFailed] = useState(false);
   const [iconFailed, setIconFailed] = useState(false);
+  const [failedMomentImgKeys, setFailedMomentImgKeys] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     setThumbFailed(false);
     setIconFailed(false);
+    setFailedMomentImgKeys(new Set());
   }, [dailyNote?.id, dailyNote?.thumbnailUrl]);
+
+  const moments = dailyNote?.moments;
+  const hasMomentsMode = Array.isArray(moments);
+  const visibleMoments: DiaryMoment[] = hasMomentsMode
+    ? expanded
+      ? moments
+      : moments.slice(0, 2)
+    : [];
+  const hiddenMomentsCount = hasMomentsMode ? Math.max(0, moments.length - visibleMoments.length) : 0;
 
   return (
     <section className="flex flex-col gap-3 h-full">
@@ -100,7 +111,7 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
           </div>
 
           <div className="min-w-0 flex-1 flex flex-col justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 font-medium text-[17px] leading-snug">
                 {dailyNote.icon?.type === 'emoji' ? (
                   <span>{dailyNote.icon.value}</span>
@@ -114,12 +125,129 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
                 ) : null}
                 <span className="truncate">{dailyNote.title}</span>
               </div>
-              <p
-                className={`text-[14.5px] mt-2.5 leading-[1.85] ${expanded ? 'sph-line-clamp-5' : 'sph-line-clamp-3'}`}
-                style={{ color: 'var(--sph-muted)' }}
-              >
-                {dailyNote.snippet || '日记已建好，点击这里提笔记录此刻的想法与见闻…'}
-              </p>
+
+              {hasMomentsMode ? (
+                visibleMoments.length > 0 ? (
+                  <div
+                    className={`mt-3 flex flex-col gap-3 ${
+                      expanded ? 'max-h-[380px] overflow-y-auto pr-1.5' : ''
+                    }`}
+                  >
+                    {visibleMoments.map((m) => {
+                      const iconKey = `icon:${m.id}`;
+                      const validImgs = m.images.filter(
+                        (_, idx) => !failedMomentImgKeys.has(`img:${m.id}:${idx}`),
+                      );
+                      return (
+                        <div
+                          key={m.id}
+                          className="rounded-xl px-3.5 py-2.5 flex flex-col gap-1.5"
+                          style={{
+                            backgroundColor: 'var(--sph-card)',
+                            border: '1px solid var(--sph-hairline)',
+                          }}
+                        >
+                          <div className="flex items-center flex-wrap gap-2 text-xs">
+                            {m.period && (
+                              <span
+                                className="px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0"
+                                style={{
+                                  backgroundColor: 'var(--sph-accent-soft)',
+                                  color: 'var(--sph-accent)',
+                                }}
+                              >
+                                {m.period}
+                              </span>
+                            )}
+                            {m.time && (
+                              <span
+                                className="sph-num-font text-[11px] shrink-0"
+                                style={{ color: 'var(--sph-subtle)' }}
+                              >
+                                {m.time}
+                              </span>
+                            )}
+                            <span className="inline-flex items-center gap-1.5 font-medium text-[13.5px] min-w-0">
+                              {m.icon?.type === 'emoji' ? (
+                                <span className="shrink-0">{m.icon.value}</span>
+                              ) : m.icon?.type === 'image' && !failedMomentImgKeys.has(iconKey) ? (
+                                <img
+                                  src={m.icon.value}
+                                  alt=""
+                                  className="w-3.5 h-3.5 rounded-sm object-contain shrink-0"
+                                  onError={() =>
+                                    setFailedMomentImgKeys((prev) => new Set(prev).add(iconKey))
+                                  }
+                                />
+                              ) : null}
+                              <span className="truncate">{m.title}</span>
+                            </span>
+                          </div>
+
+                          {m.text && (
+                            <p
+                              className={`text-[13.5px] leading-[1.75] ${
+                                expanded ? 'whitespace-pre-line' : 'sph-line-clamp-2'
+                              }`}
+                              style={{ color: 'var(--sph-muted)' }}
+                            >
+                              {m.text}
+                            </p>
+                          )}
+
+                          {expanded && validImgs.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {m.images.slice(0, 4).map((src, idx) => {
+                                const imgKey = `img:${m.id}:${idx}`;
+                                if (failedMomentImgKeys.has(imgKey)) return null;
+                                return (
+                                  <div
+                                    key={imgKey}
+                                    className="w-24 h-20 rounded-lg overflow-hidden shrink-0"
+                                    style={{ border: '1px solid var(--sph-hairline)' }}
+                                  >
+                                    <img
+                                      src={src}
+                                      alt={m.title}
+                                      loading="lazy"
+                                      onError={() =>
+                                        setFailedMomentImgKeys((prev) => new Set(prev).add(imgKey))
+                                      }
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {hiddenMomentsCount > 0 && (
+                      <div className="text-xs pl-1" style={{ color: 'var(--sph-subtle)' }}>
+                        + 还有 {hiddenMomentsCount} 条记录片段，点击查看完整日记…
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p
+                    className="text-[14px] mt-3 leading-[1.8]"
+                    style={{ color: 'var(--sph-muted)' }}
+                  >
+                    这一天的日记还没有记录片段，点击这里进入编辑记录此刻…
+                  </p>
+                )
+              ) : (
+                <p
+                  className={`text-[14.5px] mt-2.5 leading-[1.85] ${
+                    expanded ? 'sph-line-clamp-5' : 'sph-line-clamp-3'
+                  }`}
+                  style={{ color: 'var(--sph-muted)' }}
+                >
+                  {dailyNote.snippet || '日记已建好，点击这里提笔记录此刻的想法与见闻…'}
+                </p>
+              )}
             </div>
 
             <div
@@ -130,7 +258,10 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
               }}
             >
               {dailyNote.notebookName && <span>{dailyNote.notebookName}</span>}
-              {typeof dailyNote.wordCount === 'number' && (
+              {hasMomentsMode && moments.length > 0 && (
+                <span className="sph-num-font">· {moments.length} 条片段</span>
+              )}
+              {typeof dailyNote.wordCount === 'number' && dailyNote.wordCount > 0 && (
                 <span className="sph-num-font">· {dailyNote.wordCount} 字</span>
               )}
               {dailyNote.updatedAtMs > 0 && (
@@ -152,7 +283,7 @@ export const TodayDailyNoteCard: React.FC<TodayDailyNoteCardProps> = ({
             </div>
           </div>
 
-          {dailyNote.thumbnailUrl && !thumbFailed && (
+          {!hasMomentsMode && dailyNote.thumbnailUrl && !thumbFailed && (
             <div
               className="w-32 h-24 rounded-xl overflow-hidden shrink-0 self-center"
               style={{ border: '1px solid var(--sph-hairline)' }}

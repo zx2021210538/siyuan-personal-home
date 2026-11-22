@@ -99,6 +99,35 @@ describe('Content Cards (Task 7)', () => {
     expect(screen.getByText(/420 字/)).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('today-daily-note-card'));
     expect(onOpenDoc).toHaveBeenCalledWith('doc-1');
+
+    // Structured LifeLog moments rendering
+    rerender(
+      <TodayDailyNoteCard
+        expanded
+        todayStr="2026-11-10"
+        dailyNote={{
+          ...SAMPLE_DOC,
+          title: '2026-11-10',
+          wordCount: 120,
+          moments: [
+            {
+              id: 'm1',
+              title: '上午例会',
+              period: '上午',
+              time: '09:00–11:30',
+              text: '汇报顺利完成。',
+              images: [],
+            },
+          ],
+        }}
+        loading={false}
+        onOpenDoc={onOpenDoc}
+        onCreateToday={onCreateToday}
+      />,
+    );
+    expect(screen.getByText('上午例会')).toBeInTheDocument();
+    expect(screen.getByText('汇报顺利完成。')).toBeInTheDocument();
+    expect(screen.getByText(/1 条片段/)).toBeInTheDocument();
   });
 
   it('RecentDocsCard switches tabs, hides thumbnails when absent, renders cold-start copy, and loads more', () => {

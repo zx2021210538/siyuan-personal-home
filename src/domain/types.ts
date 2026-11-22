@@ -179,6 +179,16 @@ export interface DocIconInfo {
   value: string;
 }
 
+export interface DiaryMoment {
+  id: string;
+  title: string;
+  icon?: DocIconInfo | null;
+  period?: string;
+  time?: string;
+  text: string;
+  images: string[];
+}
+
 export interface DocPreviewItem {
   id: string;
   box: string;
@@ -192,6 +202,7 @@ export interface DocPreviewItem {
   updatedAtMs: number;
   readAtMs?: number;
   wordCount?: number;
+  moments?: DiaryMoment[];
 }
 
 export interface OverviewStats {
