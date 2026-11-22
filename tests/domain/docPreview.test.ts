@@ -4,6 +4,7 @@ import {
   extractDocIcon,
   extractTitleImageUrl,
   formatRelativeTime,
+  groupDocsByDateBucket,
   parseIalAttrs,
   parseTags,
 } from '../../src/domain/docPreview';
@@ -79,5 +80,26 @@ describe('docPreview', () => {
     expect(formatRelativeTime(now - 12 * 60_000, now)).toBe('12 分钟前');
     expect(formatRelativeTime(now - 3 * 3_600_000, now)).toBe('3 小时前');
     expect(formatRelativeTime(now - 5 * 86_400_000, now)).toBe('11-17');
+  });
+
+  it('groups documents into Notebook Navigator date buckets', () => {
+    const now = new Date(2026, 10, 22, 16, 0, 0).getTime();
+    const docs = [
+      { id: '1', ts: new Date(2026, 10, 22, 10, 0, 0).getTime() },
+      { id: '2', ts: new Date(2026, 10, 21, 18, 0, 0).getTime() },
+      { id: '3', ts: new Date(2026, 10, 18, 9, 0, 0).getTime() },
+      { id: '4', ts: new Date(2026, 10, 5, 9, 0, 0).getTime() },
+      { id: '5', ts: new Date(2026, 8, 15, 9, 0, 0).getTime() },
+      { id: '6', ts: 0 },
+    ];
+    const groups = groupDocsByDateBucket(docs, (d) => d.ts, now);
+    expect(groups.map((g) => [g.label, g.items.map((i) => i.id)])).toEqual([
+      ['今天', ['1']],
+      ['昨天', ['2']],
+      ['近 7 天', ['3']],
+      ['近 30 天', ['4']],
+      ['2026 年 9 月', ['5']],
+      ['更早', ['6']],
+    ]);
   });
 });

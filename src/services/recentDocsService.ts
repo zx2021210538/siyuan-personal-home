@@ -23,6 +23,7 @@ interface DocRow {
 export interface RecentDocsQuery {
   notebookId?: string | 'all';
   hideDailyNotes: boolean;
+  hiddenNotebookIds?: string[];
   keyword?: string;
   limit: number;
   offset: number;
@@ -77,7 +78,7 @@ async function enrichDocPreviews(
 
   const [snippetRows, assetRows] = await Promise.all([
     api.sql<{ root_id: string; content: string; markdown: string }>(
-      `SELECT root_id, content, markdown FROM (SELECT root_id, content, markdown, ROW_NUMBER() OVER (PARTITION BY root_id ORDER BY sort ASC) AS rn FROM blocks WHERE root_id IN (${inClause}) AND type IN ('p','h','c','m','t') AND content != '') WHERE rn <= 4 LIMIT ${docIds.length * 4}`,
+      `SELECT root_id, content, markdown FROM (SELECT root_id, content, markdown, ROW_NUMBER() OVER (PARTITION BY root_id ORDER BY sort ASC) AS rn FROM blocks WHERE root_id IN (${inClause}) AND type IN ('p','h','c','m','t') AND content != '') WHERE rn <= 6 LIMIT ${docIds.length * 6}`,
     ),
     api.sql<{ root_id: string; path: string }>(
       `SELECT root_id, path FROM (SELECT root_id, path, ROW_NUMBER() OVER (PARTITION BY root_id ORDER BY id ASC) AS rn FROM assets WHERE root_id IN (${inClause}) AND (LOWER(path) LIKE '%.png' OR LOWER(path) LIKE '%.jpg' OR LOWER(path) LIKE '%.jpeg' OR LOWER(path) LIKE '%.webp' OR LOWER(path) LIKE '%.gif' OR LOWER(path) LIKE '%.avif' OR LOWER(path) LIKE '%.svg')) WHERE rn = 1 LIMIT ${docIds.length}`,
@@ -87,7 +88,7 @@ async function enrichDocPreviews(
   const snippetsByDoc = new Map<string, string[]>();
   for (const row of snippetRows) {
     const arr = snippetsByDoc.get(row.root_id) ?? [];
-    if (arr.length < 4) {
+    if (arr.length < 6) {
       arr.push(row.markdown || row.content || '');
       snippetsByDoc.set(row.root_id, arr);
     }
@@ -109,7 +110,7 @@ async function enrichDocPreviews(
       hpath: row.hpath,
       title: row.content || '未命名文档',
       icon: extractDocIcon(row.ial),
-      snippet: cleanSnippetMarkdown(snippetsByDoc.get(row.id) ?? [], 160),
+      snippet: cleanSnippetMarkdown(snippetsByDoc.get(row.id) ?? [], 360),
       thumbnailUrl: titleImg || assetImgByDoc.get(row.id) || null,
       tags: parseTags(row.tag, 3),
       updatedAtMs: parseSiYuanTimestamp(row.updated),
@@ -126,6 +127,14 @@ export async function fetchRecentModifiedDocs(
   const predicates: string[] = [`type = 'd'`];
   if (query.notebookId && query.notebookId !== 'all') {
     predicates.push(`box = '${escapeSqlString(query.notebookId)}'`);
+  } else if (query.hiddenNotebookIds && query.hiddenNotebookIds.length > 0) {
+    const excluded = query.hiddenNotebookIds
+      .filter((id) => typeof id === 'string' && id.trim().length > 0)
+      .map((id) => `'${escapeSqlString(id.trim())}'`)
+      .join(',');
+    if (excluded) {
+      predicates.push(`box NOT IN (${excluded})`);
+    }
   }
   if (query.hideDailyNotes) {
     predicates.push(
@@ -190,6 +199,7 @@ export async function fetchRecentReadDocs(
   }
 
   const dailySet = new Set(dailyAttrs.map((a) => a.root_id));
+  const hiddenSet = new Set(query.hiddenNotebookIds ?? []);
   const kw = query.keyword?.trim().toLowerCase() ?? '';
   const readAtMap = new Map(records.map((r) => [r.docId, r.lastReadAt]));
 
@@ -197,7 +207,11 @@ export async function fetchRecentReadDocs(
   for (const rec of records) {
     const row = rowMap.get(rec.docId);
     if (!row) continue;
-    if (query.notebookId && query.notebookId !== 'all' && row.box !== query.notebookId) continue;
+    if (query.notebookId && query.notebookId !== 'all') {
+      if (row.box !== query.notebookId) continue;
+    } else if (hiddenSet.has(row.box)) {
+      continue;
+    }
     if (query.hideDailyNotes && dailySet.has(row.id)) continue;
     if (
       kw &&

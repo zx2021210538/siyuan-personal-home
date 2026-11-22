@@ -1,22 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, Upload, X } from 'lucide-react';
+import { Download, EyeOff, Upload, X } from 'lucide-react';
 import { validateBackupBundle } from '../domain/storeMerge';
 import type { PluginSettings, TopBarPosition, WeekStartDay } from '../domain/types';
+import type { SiYuanNotebook } from '../services/siyuanApi';
 
 export interface SettingsModalProps {
   open: boolean;
   settings: PluginSettings;
+  notebooks?: SiYuanNotebook[];
+  diaryNotebookId?: string;
   onClose: () => void;
   onChangeSettings: (patch: Partial<PluginSettings>) => void;
+  onToggleHiddenNotebook?: (nbId: string) => void;
   onExportJson: () => Promise<void>;
   onImportJson: (raw: unknown) => Promise<void>;
 }
 
+const PREVIEW_OPTIONS = [0, 1, 2, 3, 4, 5] as const;
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   open,
   settings,
+  notebooks = [],
+  diaryNotebookId = '',
   onClose,
   onChangeSettings,
+  onToggleHiddenNotebook,
   onExportJson,
   onImportJson,
 }) => {
@@ -76,7 +85,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="sph-modal w-full max-w-md p-6 flex flex-col gap-5"
+        className="sph-modal w-full max-w-md max-h-[86vh] overflow-y-auto p-6 flex flex-col gap-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -185,6 +194,93 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </span>
             </label>
           </div>
+
+          <div
+            className="pt-3.5 flex flex-col gap-2.5"
+            style={{ borderTop: '1px solid var(--sph-border)' }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-medium">笔记卡片预览行数</span>
+              <span className="text-xs" style={{ color: 'var(--sph-subtle)' }}>
+                {(settings.previewLines ?? 2) === 0
+                  ? '紧凑模式'
+                  : `${settings.previewLines ?? 2} 行`}
+              </span>
+            </div>
+            <div
+              className="grid grid-cols-6 gap-1 p-1 rounded-lg"
+              style={{ backgroundColor: 'var(--sph-wash)' }}
+            >
+              {PREVIEW_OPTIONS.map((n) => {
+                const active = (settings.previewLines ?? 2) === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => onChangeSettings({ previewLines: n })}
+                    className="py-1 rounded-md text-xs sph-num-font font-medium transition-colors"
+                    style={{
+                      backgroundColor: active ? 'var(--sph-card)' : 'transparent',
+                      color: active ? 'var(--sph-accent)' : 'var(--sph-muted)',
+                      boxShadow: active ? 'var(--sph-shadow-soft)' : 'none',
+                    }}
+                  >
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {notebooks.filter((nb) => !nb.closed).length > 0 && onToggleHiddenNotebook && (
+            <div
+              className="pt-3.5 flex flex-col gap-2"
+              style={{ borderTop: '1px solid var(--sph-border)' }}
+            >
+              <div>
+                <div className="font-medium">在近期笔记中隐藏指定笔记本</div>
+                <div className="text-[11px] mt-0.5" style={{ color: 'var(--sph-subtle)' }}>
+                  勾选后，该笔记本内的全部文档（含日记及年/月父文档）不会出现在「总览」与「全部笔记本」中
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {notebooks
+                  .filter((nb) => !nb.closed)
+                  .map((nb) => {
+                    const isHidden = (settings.hiddenRecentNotebookIds ?? []).includes(nb.id);
+                    const isDiary = nb.id === diaryNotebookId;
+                    return (
+                      <button
+                        key={nb.id}
+                        type="button"
+                        aria-pressed={isHidden}
+                        onClick={() => onToggleHiddenNotebook(nb.id)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors"
+                        style={{
+                          backgroundColor: isHidden ? 'var(--sph-accent-soft)' : 'var(--sph-wash)',
+                          color: isHidden ? 'var(--sph-accent)' : 'var(--sph-muted)',
+                          border: `1px solid ${isHidden ? 'var(--sph-accent-border)' : 'var(--sph-hairline)'}`,
+                        }}
+                      >
+                        {isHidden && <EyeOff size={11} />}
+                        <span>{nb.name}</span>
+                        {isDiary && (
+                          <span
+                            className="text-[10px] px-1 rounded"
+                            style={{
+                              backgroundColor: 'var(--sph-card)',
+                              color: 'var(--sph-subtle)',
+                            }}
+                          >
+                            日记本
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div

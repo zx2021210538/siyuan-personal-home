@@ -186,4 +186,48 @@ describe('recentDocsService', () => {
     expect(snippetSql).not.toContain("'l'");
     expect(snippetSql).not.toContain("'b'");
   });
+
+  it('excludes hiddenNotebookIds when notebookId is all, while still allowing direct inspection of a hidden notebook', async () => {
+    const sqls: string[] = [];
+    const api = createMockApi(async (stmt) => {
+      sqls.push(stmt);
+      if (stmt.includes("type = 'd'") && stmt.includes('id IN (')) {
+        return [
+          { id: 'd-tech', box: 'nb-1', hpath: '/Tech', content: '技术', tag: '', ial: '', updated: '20261122120000' },
+          { id: 'd-diary-month', box: 'nb-2', hpath: '/2026/11', content: '2026/11', tag: '', ial: '', updated: '20261122110000' },
+        ];
+      }
+      return [];
+    });
+
+    await fetchRecentModifiedDocs(api, NOTEBOOKS, {
+      notebookId: 'all',
+      hideDailyNotes: false,
+      hiddenNotebookIds: ['nb-2'],
+      limit: 12,
+      offset: 0,
+    });
+    expect(sqls[0]).toContain("box NOT IN ('nb-2')");
+
+    await fetchRecentModifiedDocs(api, NOTEBOOKS, {
+      notebookId: 'nb-2',
+      hideDailyNotes: false,
+      hiddenNotebookIds: ['nb-2'],
+      limit: 12,
+      offset: 0,
+    });
+    expect(sqls[1]).toContain("box = 'nb-2'");
+    expect(sqls[1]).not.toContain('NOT IN');
+
+    const readAll = await fetchRecentReadDocs(
+      api,
+      NOTEBOOKS,
+      [
+        { docId: 'd-tech', lastReadAt: 2000, readCount: 1 },
+        { docId: 'd-diary-month', lastReadAt: 1500, readCount: 1 },
+      ],
+      { notebookId: 'all', hideDailyNotes: false, hiddenNotebookIds: ['nb-2'], limit: 12, offset: 0 },
+    );
+    expect(readAll.items.map((i) => i.id)).toEqual(['d-tech']);
+  });
 });

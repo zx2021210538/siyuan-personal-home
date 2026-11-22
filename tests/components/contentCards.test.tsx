@@ -202,4 +202,64 @@ describe('Content Cards (Task 7)', () => {
     expect(screen.queryByAltText('自定义图标笔记')).toBeNull();
     expect(document.querySelectorAll('img')).toHaveLength(1);
   });
+
+  it('RecentDocsCard navigator mode supports hiding notebooks, appearance popover (lines/justify/indent), date groups, and clickable tags', () => {
+    const onToggleHiddenNotebook = vi.fn();
+    const onChangeKeyword = vi.fn();
+    const onOpenDoc = vi.fn();
+    const onChangeDisplayPrefs = vi.fn();
+
+    const { container } = render(
+      <RecentDocsCard
+        navigatorMode
+        activeTab="modified"
+        onChangeTab={vi.fn()}
+        items={[SAMPLE_DOC]}
+        hasMore={false}
+        loading={false}
+        hiddenNotebookIds={[]}
+        onToggleHiddenNotebook={onToggleHiddenNotebook}
+        diaryNotebookId="nb-diary"
+        notebookId="all"
+        notebooks={[
+          { id: 'nb-1', name: '技术笔记', icon: '', closed: false },
+          { id: 'nb-diary', name: '每日日记', icon: '', closed: false },
+        ]}
+        onChangeNotebook={vi.fn()}
+        keyword=""
+        onChangeKeyword={onChangeKeyword}
+        onLoadMore={vi.fn()}
+        onOpenDoc={onOpenDoc}
+        onChangeDisplayPrefs={onChangeDisplayPrefs}
+      />,
+    );
+
+    // Date group header shown
+    expect(screen.getByText('今天')).toBeInTheDocument();
+
+    // Clicking tag filters keyword without opening document
+    fireEvent.click(screen.getByRole('button', { name: '#前端' }));
+    expect(onChangeKeyword).toHaveBeenCalledWith('#前端');
+    expect(onOpenDoc).not.toHaveBeenCalled();
+
+    // Hiding diary notebook via dedicated switch or eye button
+    fireEvent.click(screen.getByLabelText('隐藏日记本'));
+    expect(onToggleHiddenNotebook).toHaveBeenCalledWith('nb-diary');
+
+    // Open Appearance popover and adjust preview lines + justify + indent
+    fireEvent.click(screen.getByRole('button', { name: '卡片显示外观' }));
+    fireEvent.click(screen.getByRole('button', { name: '预览 4 行' }));
+    expect(onChangeDisplayPrefs).toHaveBeenCalledWith({ previewLines: 4 });
+    expect(container.querySelector('.sph-line-clamp-4')).not.toBeNull();
+
+    fireEvent.click(screen.getByLabelText('两端对齐'));
+    expect(container.querySelector('.sph-snippet-justify')).not.toBeNull();
+
+    fireEvent.click(screen.getByLabelText('首行缩进 2 字'));
+    expect(container.querySelector('.sph-snippet-indent')).not.toBeNull();
+
+    // Compact mode (0 lines) hides snippet
+    fireEvent.click(screen.getByRole('button', { name: '紧凑模式（0行）' }));
+    expect(screen.queryByText(/这是一段清洗后的笔记正文摘要预览/)).toBeNull();
+  });
 });

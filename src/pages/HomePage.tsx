@@ -21,6 +21,7 @@ import { TodayDailyNoteCard } from '../components/TodayDailyNoteCard';
 import { formatRelativeTime } from '../domain/docPreview';
 import { getActiveTasks, moveItemOrder, sortTasksByPriority } from '../domain/taskLogic';
 import {
+  DEFAULT_NOTE_CARD_PREFS,
   DEFAULT_SETTINGS,
   DEFAULT_TASK_CATEGORIES,
   type DocPreviewItem,
@@ -29,6 +30,7 @@ import {
   type HeatmapDay,
   type HomeSubTab,
   type MonthCalendarDay,
+  type NoteCardDisplayPrefs,
   type OverviewStats,
   type PluginSettings,
   type RecentReadsStore,
@@ -305,6 +307,7 @@ export const HomePage: React.FC<HomePageProps> = ({
       nbs: SiYuanNotebook[],
       reads: RecentReadsStore,
       hideDaily: boolean,
+      hiddenNbIds: string[],
       nbFilter: string,
       kw: string,
       offset: number,
@@ -316,6 +319,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         const query = {
           notebookId: nbFilter,
           hideDailyNotes: hideDaily,
+          hiddenNotebookIds: hiddenNbIds,
           keyword: kw,
           limit: PAGE_SIZE,
           offset,
@@ -384,6 +388,7 @@ export const HomePage: React.FC<HomePageProps> = ({
           nbs,
           loadedReads,
           loadedSettings.hideDailyNotesInRecent,
+          loadedSettings.hiddenRecentNotebookIds ?? [],
           recentNotebookId,
           recentKeyword,
           0,
@@ -552,6 +557,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         notebooks,
         latestReads,
         settings.hideDailyNotesInRecent,
+        settings.hiddenRecentNotebookIds ?? [],
         recentNotebookId,
         recentKeyword,
         0,
@@ -569,12 +575,33 @@ export const HomePage: React.FC<HomePageProps> = ({
         notebooks,
         recentReadsStore,
         nextVal,
+        settings.hiddenRecentNotebookIds ?? [],
         recentNotebookId,
         recentKeyword,
         0,
         false,
       );
     }, '更新筛选条件失败');
+  };
+
+  const handleToggleHiddenNotebook = async (nbId: string) => {
+    await safeRun(async () => {
+      const curr = settings.hiddenRecentNotebookIds ?? [];
+      const exists = curr.includes(nbId);
+      const nextIds = exists ? curr.filter((id) => id !== nbId) : [...curr, nbId];
+      await handlePatchSettings({ hiddenRecentNotebookIds: nextIds });
+      await loadRecentDocs(
+        recentTab,
+        notebooks,
+        recentReadsStore,
+        settings.hideDailyNotesInRecent,
+        nextIds,
+        recentNotebookId,
+        recentKeyword,
+        0,
+        false,
+      );
+    }, '更新隐藏笔记本设置失败');
   };
 
   const handleChangeRecentNotebook = async (nbId: string) => {
@@ -585,6 +612,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         notebooks,
         recentReadsStore,
         settings.hideDailyNotesInRecent,
+        settings.hiddenRecentNotebookIds ?? [],
         nbId,
         recentKeyword,
         0,
@@ -604,6 +632,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             notebooks,
             recentReadsStore,
             settings.hideDailyNotesInRecent,
+            settings.hiddenRecentNotebookIds ?? [],
             recentNotebookId,
             kw,
             0,
@@ -612,6 +641,28 @@ export const HomePage: React.FC<HomePageProps> = ({
         '搜索最近笔记失败',
       );
     }, 200);
+  };
+
+  const handleJumpToTagFilter = (tag: string) => {
+    const kw = `#${tag}`;
+    setActiveSubTab('notes');
+    setRecentKeyword(kw);
+    if (keywordTimerRef.current) clearTimeout(keywordTimerRef.current);
+    void safeRun(
+      () =>
+        loadRecentDocs(
+          recentTab,
+          notebooks,
+          recentReadsStore,
+          settings.hideDailyNotesInRecent,
+          settings.hiddenRecentNotebookIds ?? [],
+          recentNotebookId,
+          kw,
+          0,
+          false,
+        ),
+      '按标签筛选笔记失败',
+    );
   };
 
   // --- Habits handlers ---
@@ -873,6 +924,29 @@ export const HomePage: React.FC<HomePageProps> = ({
       ).length,
     [visibleHabitsSorted, habitsStore.checkins, todayStr],
   );
+
+  const noteCardPrefs = useMemo<NoteCardDisplayPrefs>(
+    () => ({
+      previewLines: settings.previewLines ?? DEFAULT_NOTE_CARD_PREFS.previewLines,
+      showThumbnail: settings.showCardThumbnail ?? DEFAULT_NOTE_CARD_PREFS.showThumbnail,
+      showTags: settings.showCardTags ?? DEFAULT_NOTE_CARD_PREFS.showTags,
+      snippetJustify: settings.snippetJustify ?? DEFAULT_NOTE_CARD_PREFS.snippetJustify,
+      snippetIndent: settings.snippetIndent ?? DEFAULT_NOTE_CARD_PREFS.snippetIndent,
+      groupByDate: settings.groupNotesByDate ?? DEFAULT_NOTE_CARD_PREFS.groupByDate,
+    }),
+    [settings],
+  );
+
+  const handleChangeNoteCardPrefs = (patch: Partial<NoteCardDisplayPrefs>) => {
+    const settingsPatch: Partial<PluginSettings> = {};
+    if (patch.previewLines !== undefined) settingsPatch.previewLines = patch.previewLines;
+    if (patch.showThumbnail !== undefined) settingsPatch.showCardThumbnail = patch.showThumbnail;
+    if (patch.showTags !== undefined) settingsPatch.showCardTags = patch.showTags;
+    if (patch.snippetJustify !== undefined) settingsPatch.snippetJustify = patch.snippetJustify;
+    if (patch.snippetIndent !== undefined) settingsPatch.snippetIndent = patch.snippetIndent;
+    if (patch.groupByDate !== undefined) settingsPatch.groupNotesByDate = patch.groupByDate;
+    void handlePatchSettings(settingsPatch);
+  };
 
   const rootStyle = useMemo(() => {
     if (!settings.followEditorFont || !editorFontFamily) return undefined;
@@ -1149,59 +1223,86 @@ export const HomePage: React.FC<HomePageProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {recentItems.slice(0, 4).map((doc) => (
-                    <article
-                      key={doc.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openDoc(doc.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          openDoc(doc.id);
-                        }
-                      }}
-                      className="sph-doc-card p-4 sm:p-5 flex gap-4 cursor-pointer"
-                    >
-                      <div className="min-w-0 flex-1 flex flex-col justify-between gap-2.5">
-                        <div>
-                          <div className="flex items-center gap-1.5 text-[15.5px] font-medium leading-snug">
-                            {doc.icon?.type === 'emoji' && (
-                              <span className="text-sm shrink-0">{doc.icon.value}</span>
+                  {recentItems.slice(0, 4).map((doc) => {
+                    const clampClass =
+                      noteCardPrefs.previewLines > 0
+                        ? `sph-line-clamp-${Math.max(1, Math.min(5, Math.round(noteCardPrefs.previewLines)))}`
+                        : '';
+                    const ovSnippetClass = [
+                      clampClass,
+                      noteCardPrefs.snippetJustify ? 'sph-snippet-justify' : '',
+                      noteCardPrefs.snippetIndent ? 'sph-snippet-indent' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ');
+                    return (
+                      <article
+                        key={doc.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openDoc(doc.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openDoc(doc.id);
+                          }
+                        }}
+                        className="sph-doc-card p-4 sm:p-5 flex gap-4 cursor-pointer"
+                      >
+                        <div className="min-w-0 flex-1 flex flex-col justify-between gap-2.5">
+                          <div>
+                            <div className="flex items-center gap-1.5 text-[15.5px] font-medium leading-snug">
+                              {doc.icon?.type === 'emoji' && (
+                                <span className="text-sm shrink-0">{doc.icon.value}</span>
+                              )}
+                              <span className="truncate">{doc.title}</span>
+                            </div>
+                            {noteCardPrefs.previewLines > 0 && doc.snippet && (
+                              <p
+                                className={`text-[13.5px] mt-1.5 leading-relaxed ${ovSnippetClass}`}
+                                style={{ color: 'var(--sph-muted)' }}
+                              >
+                                {doc.snippet}
+                              </p>
                             )}
-                            <span className="truncate">{doc.title}</span>
                           </div>
-                          {doc.snippet && (
-                            <p
-                              className="text-[13.5px] mt-1.5 leading-relaxed sph-line-clamp-2"
-                              style={{ color: 'var(--sph-muted)' }}
-                            >
-                              {doc.snippet}
-                            </p>
-                          )}
+                          <div className="flex items-center flex-wrap gap-1.5 text-[11.5px]" style={{ color: 'var(--sph-subtle)' }}>
+                            {doc.notebookName && <span>{doc.notebookName}</span>}
+                            {noteCardPrefs.showTags &&
+                              doc.tags.slice(0, 2).map((tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleJumpToTagFilter(tag);
+                                  }}
+                                  className="sph-tag-pill"
+                                >
+                                  #{tag}
+                                </button>
+                              ))}
+                            <span className="ml-auto sph-num-font shrink-0">
+                              {formatRelativeTime(doc.readAtMs ?? doc.updatedAtMs, Date.now())}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-[11.5px]" style={{ color: 'var(--sph-subtle)' }}>
-                          {doc.notebookName && <span>{doc.notebookName}</span>}
-                          <span className="ml-auto sph-num-font">
-                            {formatRelativeTime(doc.readAtMs ?? doc.updatedAtMs, Date.now())}
-                          </span>
-                        </div>
-                      </div>
-                      {doc.thumbnailUrl && (
-                        <div
-                          className="w-24 h-[72px] rounded-xl overflow-hidden shrink-0 self-center"
-                          style={{ border: '1px solid var(--sph-hairline)' }}
-                        >
-                          <img
-                            src={doc.thumbnailUrl}
-                            alt={doc.title}
-                            loading="lazy"
-                            className="sph-doc-thumb w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-                    </article>
-                  ))}
+                        {noteCardPrefs.showThumbnail && doc.thumbnailUrl && (
+                          <div
+                            className="w-20 h-20 rounded-xl overflow-hidden shrink-0 self-center"
+                            style={{ border: '1px solid var(--sph-hairline)' }}
+                          >
+                            <img
+                              src={doc.thumbnailUrl}
+                              alt={doc.title}
+                              loading="lazy"
+                              className="sph-doc-thumb w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -1222,6 +1323,8 @@ export const HomePage: React.FC<HomePageProps> = ({
               navigatorMode
               viewMode={settings.recentViewMode ?? 'list'}
               onChangeViewMode={(mode) => void handlePatchSettings({ recentViewMode: mode })}
+              displayPrefs={noteCardPrefs}
+              onChangeDisplayPrefs={handleChangeNoteCardPrefs}
               activeTab={recentTab}
               onChangeTab={(tab) => void handleChangeRecentTab(tab)}
               items={recentItems}
@@ -1229,6 +1332,9 @@ export const HomePage: React.FC<HomePageProps> = ({
               loading={recentLoading}
               hideDailyNotes={settings.hideDailyNotesInRecent}
               onToggleHideDailyNotes={() => void handleToggleHideDailyNotes()}
+              hiddenNotebookIds={settings.hiddenRecentNotebookIds ?? []}
+              onToggleHiddenNotebook={(nbId) => void handleToggleHiddenNotebook(nbId)}
+              diaryNotebookId={activeDiaryNotebookId}
               notebookId={recentNotebookId}
               notebooks={notebooks}
               onChangeNotebook={(nbId) => void handleChangeRecentNotebook(nbId)}
@@ -1240,6 +1346,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   notebooks,
                   recentReadsStore,
                   settings.hideDailyNotesInRecent,
+                  settings.hiddenRecentNotebookIds ?? [],
                   recentNotebookId,
                   recentKeyword,
                   recentOffset + PAGE_SIZE,
@@ -1397,8 +1504,11 @@ export const HomePage: React.FC<HomePageProps> = ({
       <SettingsModal
         open={settingsOpen}
         settings={settings}
+        notebooks={notebooks}
+        diaryNotebookId={activeDiaryNotebookId}
         onClose={() => setSettingsOpen(false)}
         onChangeSettings={(patch) => void handlePatchSettings(patch)}
+        onToggleHiddenNotebook={(nbId) => void handleToggleHiddenNotebook(nbId)}
         onExportJson={handleExportJson}
         onImportJson={handleImportJson}
       />

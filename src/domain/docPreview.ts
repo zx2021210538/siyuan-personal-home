@@ -152,3 +152,63 @@ export function formatRelativeTime(timestampMs: number, nowMs: number): string {
   const day = String(target.getDate()).padStart(2, '0');
   return `${mon}-${day}`;
 }
+
+export interface DocDateGroup<T> {
+  key: string;
+  label: string;
+  items: T[];
+}
+
+export function groupDocsByDateBucket<T>(
+  items: T[],
+  getTsMs: (item: T) => number,
+  nowMs: number = Date.now(),
+): DocDateGroup<T>[] {
+  if (items.length === 0) return [];
+  const now = new Date(nowMs);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfYesterday = startOfToday - 86_400_000;
+  const startOfLast7 = startOfToday - 6 * 86_400_000;
+  const startOfLast30 = startOfToday - 29 * 86_400_000;
+
+  const groups: DocDateGroup<T>[] = [];
+  const indexByKey = new Map<string, DocDateGroup<T>>();
+
+  for (const item of items) {
+    const ts = getTsMs(item);
+    let key: string;
+    let label: string;
+    if (!ts || ts <= 0) {
+      key = 'earlier';
+      label = '更早';
+    } else if (ts >= startOfToday) {
+      key = 'today';
+      label = '今天';
+    } else if (ts >= startOfYesterday) {
+      key = 'yesterday';
+      label = '昨天';
+    } else if (ts >= startOfLast7) {
+      key = 'last7';
+      label = '近 7 天';
+    } else if (ts >= startOfLast30) {
+      key = 'last30';
+      label = '近 30 天';
+    } else {
+      const dt = new Date(ts);
+      const y = dt.getFullYear();
+      const m = dt.getMonth() + 1;
+      key = `${y}-${String(m).padStart(2, '0')}`;
+      label = `${y} 年 ${m} 月`;
+    }
+
+    let bucket = indexByKey.get(key);
+    if (!bucket) {
+      bucket = { key, label, items: [] };
+      indexByKey.set(key, bucket);
+      groups.push(bucket);
+    }
+    bucket.items.push(item);
+  }
+
+  return groups;
+}

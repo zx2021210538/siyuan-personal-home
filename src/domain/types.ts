@@ -3,6 +3,24 @@ export type TopBarPosition = 'left' | 'right';
 export type RecentTabKey = 'modified' | 'read';
 export type HomeSubTab = 'overview' | 'notes' | 'journal' | 'plan';
 
+export interface NoteCardDisplayPrefs {
+  previewLines: number; // 0 (compact) .. 5
+  showThumbnail: boolean;
+  showTags: boolean;
+  snippetJustify: boolean;
+  snippetIndent: boolean;
+  groupByDate: boolean;
+}
+
+export const DEFAULT_NOTE_CARD_PREFS: NoteCardDisplayPrefs = {
+  previewLines: 2,
+  showThumbnail: true,
+  showTags: true,
+  snippetJustify: false,
+  snippetIndent: false,
+  groupByDate: true,
+};
+
 export interface PluginSettings {
   version: 1;
   topBarPosition: TopBarPosition;
@@ -13,8 +31,15 @@ export interface PluginSettings {
   useThemeAccent: boolean;
   followEditorFont: boolean;
   hideDailyNotesInRecent: boolean;
+  hiddenRecentNotebookIds?: string[];
   recentTab: RecentTabKey;
   recentViewMode?: 'list' | 'grid';
+  previewLines?: number;
+  showCardThumbnail?: boolean;
+  showCardTags?: boolean;
+  snippetJustify?: boolean;
+  snippetIndent?: boolean;
+  groupNotesByDate?: boolean;
   diaryNotebookId: string;
 }
 
@@ -28,7 +53,15 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   useThemeAccent: true,
   followEditorFont: true,
   hideDailyNotesInRecent: false,
+  hiddenRecentNotebookIds: [],
   recentTab: 'modified',
+  recentViewMode: 'list',
+  previewLines: 2,
+  showCardThumbnail: true,
+  showCardTags: true,
+  snippetJustify: false,
+  snippetIndent: false,
+  groupNotesByDate: true,
   diaryNotebookId: '',
 };
 

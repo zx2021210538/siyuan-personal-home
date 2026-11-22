@@ -298,6 +298,13 @@
     }
   }
 
+  .sph-line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   .sph-line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -312,11 +319,73 @@
     overflow: hidden;
   }
 
+  .sph-line-clamp-4 {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   .sph-line-clamp-5 {
     display: -webkit-box;
     -webkit-line-clamp: 5;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  .sph-snippet-justify {
+    text-align: justify;
+    text-justify: inter-ideograph;
+  }
+
+  .sph-snippet-indent {
+    text-indent: 2em;
+  }
+
+  .sph-popover {
+    background-color: var(--sph-card);
+    border: 1px solid var(--sph-border-strong);
+    border-radius: 14px;
+    box-shadow: var(--sph-shadow-float);
+  }
+
+  .sph-date-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 2px 6px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: var(--sph-subtle);
+  }
+
+  .sph-date-group-header::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background-color: var(--sph-hairline);
+  }
+
+  .sph-tag-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 1.5;
+    background-color: var(--sph-accent-soft);
+    color: var(--sph-accent);
+    transition: background-color 140ms ease, color 140ms ease;
+  }
+
+  .sph-tag-pill:hover {
+    background-color: var(--sph-accent-medium);
+  }
+
+  .sph-tag-pill.sph-tag-pill-active {
+    background-color: var(--sph-accent);
+    color: var(--sph-accent-fg);
   }
 
   .sph-btn {
