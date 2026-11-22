@@ -2,7 +2,7 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest';
 import { HomePage } from '../../src/pages/HomePage';
 import { StorageService, type PluginDataAdapter } from '../../src/services/storageService';
-import type { SiYuanClient } from '../../src/services/siyuanApi';
+import { getRuntimeEditorFontFamily, type SiYuanClient } from '../../src/services/siyuanApi';
 
 function createMemoryStorage() {
   const files = new Map<string, unknown>();
@@ -61,12 +61,13 @@ function createMockApi(): SiYuanClient {
     setBlockAttrs: vi.fn().mockResolvedValue(undefined),
     getLocalStorage: vi.fn().mockResolvedValue({ 'local-dailynoteid': 'nb-a' }),
     setLocalStorageVal: vi.fn().mockResolvedValue(undefined),
+    getEditorFontFamily: vi.fn().mockResolvedValue('LXGW WenKai GB'),
     searchDocs: vi.fn().mockResolvedValue([]),
   };
 }
 
-describe('HomePage integration (Task 9)', () => {
-  it('loads all modules, links diary notebook switching to local-dailynoteid + stats, persists task/habit, and reloads on sync-end', async () => {
+describe('HomePage integration (Task 9 + multi-tab studio)', () => {
+  it('applies SiYuan editor font, switches across 4 sub-tabs, links diary notebook switching, persists tasks, and reloads on sync-end', async () => {
     const { storage, files } = createMemoryStorage();
     const api = createMockApi();
     const openDoc = vi.fn();
@@ -78,7 +79,7 @@ describe('HomePage integration (Task 9)', () => {
       };
     };
 
-    render(
+    const { container } = render(
       <HomePage
         api={api}
         storage={storage}
@@ -91,16 +92,25 @@ describe('HomePage integration (Task 9)', () => {
     await waitFor(() => {
       expect(screen.getByText('个人主页设计笔记')).toBeInTheDocument();
       expect(screen.getByText('108')).toBeInTheDocument();
+      const styleAttr = container.querySelector('.sph-root')?.getAttribute('style') ?? '';
+      expect(styleAttr).toContain('"LXGW WenKai GB"');
+      expect(styleAttr).toContain('var(--b3-font-family-protyle, var(--sph-font-ui))');
     });
 
-    // Switch diary notebook -> syncs local-dailynoteid & updates yearDiaryDays to 225
+    // Switch to "日记与日历" tab and switch diary notebook -> syncs local-dailynoteid & updates stats
+    fireEvent.click(screen.getByRole('tab', { name: '日记与日历' }));
     fireEvent.change(screen.getByLabelText('切换日记本'), { target: { value: 'nb-b' } });
     await waitFor(() => {
       expect(api.setLocalStorageVal).toHaveBeenCalledWith('local-dailynoteid', 'nb-b');
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: '总览' }));
+    await waitFor(() => {
       expect(screen.getByText('225')).toBeInTheDocument();
     });
 
-    // Create task directly on HomePage
+    // Switch to "计划与习惯" tab and create task
+    fireEvent.click(screen.getByRole('tab', { name: '计划与习惯' }));
     const taskInput = screen.getByPlaceholderText(/输入新任务回车添加/);
     fireEvent.change(taskInput, { target: { value: '集成测试任务' } });
     fireEvent.keyDown(taskInput, { key: 'Enter' });
@@ -134,9 +144,10 @@ describe('HomePage integration (Task 9)', () => {
       expect(screen.getByText('来自另一台设备的任务')).toBeInTheDocument();
     });
 
-    // Open Settings modal and toggle option
+    // Open Settings modal and check followEditorFont switch
     fireEvent.click(screen.getByRole('button', { name: '打开设置' }));
     expect(screen.getByText('个人主页设置')).toBeInTheDocument();
+    expect(screen.getByText('跟随思源编辑器字体')).toBeInTheDocument();
   });
 
   it('prevents duplicate daily note creation on rapid double click and isolates single corrupt storage file', async () => {
@@ -167,7 +178,8 @@ describe('HomePage integration (Task 9)', () => {
       expect(screen.getByText(/recent-reads\.json/)).toBeInTheDocument();
     });
 
-    const pastBtn = screen.getByRole('button', { name: /^2026-11-15$/ });
+    // Click heatmap cell for 2026-11-15 rapidly twice
+    const pastBtn = screen.getByRole('button', { name: /^2026-11-15/ });
     fireEvent.click(pastBtn);
     fireEvent.click(pastBtn);
 
@@ -210,5 +222,30 @@ describe('HomePage integration (Task 9)', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByText('个人主页设置')).toBeNull();
     confirmSpy.mockRestore();
+  });
+
+  it('getRuntimeEditorFontFamily reads appearance.globalFontFamilies when editor.fontFamily is empty', () => {
+    const win = window as unknown as {
+      siyuan?: {
+        config?: {
+          editor?: { fontFamily?: string };
+          appearance?: { globalFontFamilies?: Array<{ family?: string }> };
+        };
+      };
+    };
+    const prev = win.siyuan;
+    win.siyuan = {
+      config: {
+        editor: { fontFamily: '' },
+        appearance: {
+          globalFontFamilies: [{ family: 'LXGW WenKai GB' }],
+        },
+      },
+    };
+    try {
+      expect(getRuntimeEditorFontFamily()).toBe('LXGW WenKai GB');
+    } finally {
+      win.siyuan = prev;
+    }
   });
 });

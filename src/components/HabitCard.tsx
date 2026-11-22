@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Clock, Flame, Plus, Sparkles } from 'lucide-react';
+import { Check, Clock, Flame, Plus } from 'lucide-react';
 import { computeHabitStats, formatDurationMinutes } from '../domain/habitStats';
 import type {
   HabitCheckin,
@@ -29,7 +29,7 @@ export interface HabitCardProps {
   onCreateHabit: (draft: CreateHabitDraft) => void;
 }
 
-const PRESET_COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4'];
+const PRESET_COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#d97706', '#e11d48', '#0891b2'];
 
 export const HabitCard: React.FC<HabitCardProps> = ({
   habits,
@@ -62,6 +62,11 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   ).length;
   const progressPct =
     visibleHabits.length > 0 ? Math.round((doneTodayCount / visibleHabits.length) * 100) : 0;
+
+  const weekDayChars =
+    weekStartDay === 1
+      ? ['一', '二', '三', '四', '五', '六', '日']
+      : ['日', '一', '二', '三', '四', '五', '六'];
 
   const handleSubmitNew = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,26 +103,18 @@ export const HabitCard: React.FC<HabitCardProps> = ({
   };
 
   return (
-    <section className="sph-card p-5 flex flex-col gap-3.5">
+    <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: 'var(--sph-accent-soft)', color: 'var(--sph-accent)' }}
-          >
-            <Sparkles size={14} />
+        <div className="flex items-baseline gap-2.5">
+          <h2 className="text-[17px] font-semibold tracking-wide">习惯打卡</h2>
+          <span className="text-xs sph-num-font" style={{ color: 'var(--sph-muted)' }}>
+            今日 {doneTodayCount}/{visibleHabits.length}
           </span>
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-[15px] font-semibold">习惯打卡</h2>
-            <span className="text-xs sph-tabular" style={{ color: 'var(--sph-muted)' }}>
-              {doneTodayCount}/{visibleHabits.length}
-            </span>
-          </div>
         </div>
 
         <button
           type="button"
-          className="sph-btn px-2.5 py-1 text-xs"
+          className="sph-btn px-3 py-1 text-xs"
           onClick={() => setCreating((v) => !v)}
         >
           <Plus size={13} />
@@ -127,8 +124,8 @@ export const HabitCard: React.FC<HabitCardProps> = ({
 
       {visibleHabits.length > 0 && (
         <div
-          className="h-1.5 w-full rounded-full overflow-hidden"
-          style={{ backgroundColor: 'var(--sph-tile)' }}
+          className="h-1 w-full rounded-full overflow-hidden"
+          style={{ backgroundColor: 'var(--sph-wash)' }}
         >
           <div
             className="h-full rounded-full transition-all duration-300"
@@ -141,27 +138,20 @@ export const HabitCard: React.FC<HabitCardProps> = ({
       )}
 
       {creating && (
-        <form
-          onSubmit={handleSubmitNew}
-          className="rounded-xl p-3.5 flex flex-col gap-3"
-          style={{
-            backgroundColor: 'var(--sph-tile)',
-            border: '1px solid var(--sph-border)',
-          }}
-        >
+        <form onSubmit={handleSubmitNew} className="sph-panel p-4 flex flex-col gap-3">
           <div className="flex gap-2">
             <input
               type="text"
               aria-label="习惯图标"
               value={icon}
               onChange={(e) => setIcon(e.target.value)}
-              className="sph-input w-11 text-center"
+              className="sph-input w-12 text-center"
               maxLength={4}
             />
             <input
               type="text"
               aria-label="习惯名称"
-              placeholder="习惯名称（如：每日阅读、力量训练）"
+              placeholder="习惯名称（如：深度阅读、力量训练）"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="sph-input flex-1"
@@ -169,7 +159,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
             <select
               aria-label="打卡频率"
               className="sph-select"
@@ -223,7 +213,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-2 pt-0.5">
+          <div className="flex items-center justify-between gap-2 pt-1">
             <div className="flex items-center gap-2">
               {PRESET_COLORS.map((c) => (
                 <button
@@ -240,7 +230,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                 />
               ))}
             </div>
-            <button type="submit" className="sph-btn sph-btn-primary px-3.5 py-1.5">
+            <button type="submit" className="sph-btn sph-btn-primary px-4 py-1.5">
               保存习惯
             </button>
           </div>
@@ -248,17 +238,11 @@ export const HabitCard: React.FC<HabitCardProps> = ({
       )}
 
       {visibleHabits.length === 0 ? (
-        <div
-          className="rounded-xl py-7 px-4 text-center text-xs"
-          style={{
-            backgroundColor: 'var(--sph-tile)',
-            color: 'var(--sph-muted)',
-          }}
-        >
+        <div className="sph-panel py-10 px-4 text-center text-[13px]" style={{ color: 'var(--sph-muted)' }}>
           还没有习惯，点右上角「新建」开始养成你的第一个日常习惯。
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {visibleHabits.map((habit) => {
             const habitCheckins = checkins[habit.id] ?? {};
             const stats = computeHabitStats(habit, habitCheckins, todayStr, weekStartDay);
@@ -270,76 +254,85 @@ export const HabitCard: React.FC<HabitCardProps> = ({
             return (
               <div
                 key={habit.id}
-                className="sph-doc-row px-3.5 py-3 flex items-center gap-3"
+                className="sph-doc-card px-4 py-3.5 flex items-center gap-3.5"
               >
                 <button
                   type="button"
                   aria-label={`打卡 ${habit.name}`}
                   onClick={() => onToggleToday(habit.id)}
-                  className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all"
+                  className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all"
                   style={{
                     backgroundColor: stats.todayDone ? habit.color : 'transparent',
                     border: `2px solid ${stats.todayDone ? habit.color : 'var(--sph-border-strong)'}`,
                     color: '#ffffff',
-                    boxShadow: stats.todayDone
-                      ? `0 2px 8px -1px color-mix(in srgb, ${habit.color} 55%, transparent)`
-                      : 'none',
                   }}
                 >
-                  {stats.todayDone && <Check size={13} strokeWidth={3} />}
+                  {stats.todayDone && <Check size={14} strokeWidth={3} />}
                 </button>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-3">
                     <button
                       type="button"
                       onClick={() => onOpenDetail(habit.id)}
-                      className="text-left text-[13px] font-semibold truncate flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+                      className="text-left text-[15px] font-semibold truncate flex items-center gap-1.5 hover:opacity-75 transition-opacity"
                       style={{ color: 'var(--sph-text)' }}
                     >
                       <span>{habit.icon}</span>
                       <span className="truncate">{habit.name}</span>
                     </button>
 
-                    <div className="flex items-center gap-1.5 shrink-0" aria-label="本周打卡状态">
-                      {stats.weekDots.map((dot) => (
-                        <span
-                          key={dot.date}
-                          title={`${dot.date}${dot.state === 'done' ? ' 已打卡' : ''}`}
-                          className="inline-block rounded-full transition-transform"
-                          style={{
-                            width: dot.state === 'future' ? 5 : 7,
-                            height: dot.state === 'future' ? 5 : 7,
-                            backgroundColor:
-                              dot.state === 'done'
-                                ? habit.color
-                                : dot.state === 'future'
-                                  ? 'var(--sph-border-strong)'
-                                  : 'transparent',
-                            border:
-                              dot.state === 'missed'
-                                ? '1.5px solid var(--sph-subtle)'
-                                : 'none',
-                            outline: dot.isToday ? `1.5px solid ${habit.color}` : 'none',
-                            outlineOffset: '1.5px',
-                          }}
-                        />
+                    <div className="flex items-center gap-2 shrink-0" aria-label="本周打卡状态">
+                      {stats.weekDots.map((dot, idx) => (
+                        <div key={dot.date} className="flex flex-col items-center gap-1">
+                          <span
+                            className="text-[9.5px] leading-none select-none"
+                            style={{ color: dot.isToday ? habit.color : 'var(--sph-subtle)' }}
+                          >
+                            {weekDayChars[idx]}
+                          </span>
+                          <span
+                            title={`${dot.date}${dot.state === 'done' ? ' 已打卡' : ''}`}
+                            className="inline-block rounded-full"
+                            style={{
+                              width: dot.state === 'future' ? 6 : 8,
+                              height: dot.state === 'future' ? 6 : 8,
+                              backgroundColor:
+                                dot.state === 'done'
+                                  ? habit.color
+                                  : dot.state === 'future'
+                                    ? 'var(--sph-border-strong)'
+                                    : 'transparent',
+                              border:
+                                dot.state === 'missed'
+                                  ? '1.5px solid var(--sph-subtle)'
+                                  : 'none',
+                              outline: dot.isToday ? `1.5px solid ${habit.color}` : 'none',
+                              outlineOffset: '1.5px',
+                            }}
+                          />
+                        </div>
                       ))}
                     </div>
                   </div>
 
                   <div
-                    className="flex items-center flex-wrap gap-x-2.5 gap-y-1 mt-1.5 text-[11px] sph-tabular"
+                    className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-2 text-xs sph-num-font"
                     style={{ color: 'var(--sph-muted)' }}
                   >
                     <span className="inline-flex items-center gap-1 font-medium">
-                      <Flame size={11} style={{ color: habit.color }} />
+                      <Flame size={12} style={{ color: habit.color }} />
                       {streakText}
                     </span>
                     <span>
-                      本周 {stats.thisWeekCount}/{stats.weeklyTarget}次
+                      本周 {stats.thisWeekCount}/{stats.weeklyTarget} 次
                     </span>
                     <span style={{ color: 'var(--sph-subtle)' }}>已坚持 {stats.spanDays} 天</span>
+                    {habit.trackDuration && stats.totalDurationMinutes > 0 && (
+                      <span style={{ color: 'var(--sph-subtle)' }}>
+                        累计 {formatDurationMinutes(stats.totalDurationMinutes)}
+                      </span>
+                    )}
 
                     {habit.trackDuration &&
                       stats.todayDone &&
@@ -358,7 +351,7 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                               commitDurationEdit(habit.id);
                             if (e.key === 'Escape') setEditingDurationId(null);
                           }}
-                          className="sph-input py-0 px-1.5 w-14 text-[11px]"
+                          className="sph-input py-0 px-1.5 w-14 text-xs"
                         />
                       ) : (
                         <button
@@ -368,14 +361,14 @@ export const HabitCard: React.FC<HabitCardProps> = ({
                             setEditingDurationId(habit.id);
                             setDurationDraft(String(stats.todayDurationMinutes));
                           }}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium transition-opacity hover:opacity-80"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium hover:opacity-80"
                           style={{
-                            backgroundColor: `color-mix(in srgb, ${habit.color} 14%, transparent)`,
+                            backgroundColor: `color-mix(in srgb, ${habit.color} 13%, transparent)`,
                             color: habit.color,
                           }}
                         >
                           <Clock size={10} />
-                          <span>{formatDurationMinutes(stats.todayDurationMinutes)}</span>
+                          <span>今日 {formatDurationMinutes(stats.todayDurationMinutes)}</span>
                         </button>
                       ))}
                   </div>

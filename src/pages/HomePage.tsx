@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Settings } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  Calendar,
+  Check,
+  CheckSquare,
+  Compass,
+  RefreshCw,
+  Settings,
+} from 'lucide-react';
 import { DocPickerModal } from '../components/DocPickerModal';
 import { HabitCard, type CreateHabitDraft } from '../components/HabitCard';
 import { HabitDetailModal } from '../components/HabitDetailModal';
@@ -9,7 +18,8 @@ import { SettingsModal } from '../components/SettingsModal';
 import { StatsHeatmapCard } from '../components/StatsHeatmapCard';
 import { TaskCard } from '../components/TaskCard';
 import { TodayDailyNoteCard } from '../components/TodayDailyNoteCard';
-import { moveItemOrder } from '../domain/taskLogic';
+import { formatRelativeTime } from '../domain/docPreview';
+import { getActiveTasks, moveItemOrder, sortTasksByPriority } from '../domain/taskLogic';
 import {
   DEFAULT_SETTINGS,
   DEFAULT_TASK_CATEGORIES,
@@ -17,6 +27,7 @@ import {
   type HabitItem,
   type HabitsStore,
   type HeatmapDay,
+  type HomeSubTab,
   type MonthCalendarDay,
   type OverviewStats,
   type PluginSettings,
@@ -28,13 +39,18 @@ import {
   type TasksStore,
 } from '../domain/types';
 import {
+  fetchDailyNoteByDate,
   fetchMonthCalendarDays,
   fetchTodayDailyNote,
   openOrCreateDailyNote,
   resolveActiveDiaryNotebook,
 } from '../services/dailyNoteService';
 import { fetchRecentModifiedDocs, fetchRecentReadDocs } from '../services/recentDocsService';
-import type { SiYuanClient, SiYuanNotebook } from '../services/siyuanApi';
+import {
+  getRuntimeEditorFontFamily,
+  type SiYuanClient,
+  type SiYuanNotebook,
+} from '../services/siyuanApi';
 import { fetchOverviewStats, fetchYearHeatmap } from '../services/statsService';
 import type { StorageService } from '../services/storageService';
 
@@ -44,10 +60,24 @@ export interface HomePageProps {
   openDoc: (docId: string) => void;
   subscribeSyncRefresh?: (cb: () => void) => () => void;
   todayOverride?: string;
+  initialSubTab?: HomeSubTab;
 }
 
 const PAGE_SIZE = 12;
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+
+const SUB_TABS: Array<{ key: HomeSubTab; label: string; icon: React.ComponentType<{ size?: number }> }> = [
+  { key: 'overview', label: '总览', icon: Compass },
+  { key: 'notes', label: '笔记', icon: BookOpen },
+  { key: 'journal', label: '日记与日历', icon: Calendar },
+  { key: 'plan', label: '计划与习惯', icon: CheckSquare },
+];
+
+const PRIORITY_BADGE: Record<TaskPriority, { label: string; color: string; bg: string }> = {
+  high: { label: '高', color: '#e11d48', bg: 'rgba(225, 29, 72, 0.14)' },
+  medium: { label: '中', color: '#d97706', bg: 'rgba(217, 119, 6, 0.14)' },
+  low: { label: '低', color: '#64748b', bg: 'rgba(100, 116, 139, 0.14)' },
+};
 
 function getLocalTodayStr(): string {
   const now = new Date();
@@ -60,7 +90,7 @@ function getLocalTodayStr(): string {
 function formatChineseDateHeader(todayStr: string): string {
   const [y, m, d] = todayStr.split('-').map(Number);
   const dt = new Date(y, (m || 1) - 1, d || 1);
-  return `${y}年${m}月${d}日 ${WEEKDAYS[dt.getDay()] ?? ''}`;
+  return `${y} 年 ${m} 月 ${d} 日 · ${WEEKDAYS[dt.getDay()] ?? ''}`;
 }
 
 function getGreeting(): string {
@@ -81,10 +111,16 @@ export const HomePage: React.FC<HomePageProps> = ({
   openDoc,
   subscribeSyncRefresh,
   todayOverride,
+  initialSubTab = 'overview',
 }) => {
   const todayStr = todayOverride || getLocalTodayStr();
   const currentYear = Number(todayStr.slice(0, 4));
   const currentMonth = Number(todayStr.slice(5, 7));
+
+  const [activeSubTab, setActiveSubTab] = useState<HomeSubTab>(initialSubTab);
+  const [editorFontFamily, setEditorFontFamily] = useState<string>(() =>
+    getRuntimeEditorFontFamily(),
+  );
 
   const [settings, setSettings] = useState<PluginSettings>(DEFAULT_SETTINGS);
   const [notebooks, setNotebooks] = useState<SiYuanNotebook[]>([]);
@@ -110,6 +146,9 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [calYear, setCalYear] = useState<number>(currentYear);
   const [calMonth, setCalMonth] = useState<number>(currentMonth);
   const [calendarDays, setCalendarDays] = useState<Record<string, MonthCalendarDay>>({});
+  const [selectedJournalDate, setSelectedJournalDate] = useState<string>(todayStr);
+  const [selectedJournalNote, setSelectedJournalNote] = useState<DocPreviewItem | null>(null);
+  const [selectedJournalLoading, setSelectedJournalLoading] = useState<boolean>(false);
 
   const [recentTab, setRecentTab] = useState<RecentTabKey>('modified');
   const [recentNotebookId, setRecentNotebookId] = useState<string>('all');
@@ -144,6 +183,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const recentReqIdRef = useRef(0);
   const diaryReqIdRef = useRef(0);
+  const journalPreviewReqIdRef = useRef(0);
   const keywordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlightDailyDatesRef = useRef<Set<string>>(new Set());
 
@@ -185,22 +225,34 @@ export const HomePage: React.FC<HomePageProps> = ({
     const loadedSettings =
       settingsRes.status === 'fulfilled'
         ? settingsRes.value
-        : (errors.push(settingsRes.reason instanceof Error ? settingsRes.reason.message : 'settings.json 读取失败'),
+        : (errors.push(
+            settingsRes.reason instanceof Error
+              ? settingsRes.reason.message
+              : 'settings.json 读取失败',
+          ),
           DEFAULT_SETTINGS);
     if (tasksRes.status === 'fulfilled') {
       setTasksStore(tasksRes.value);
     } else {
-      errors.push(tasksRes.reason instanceof Error ? tasksRes.reason.message : 'tasks.json 读取失败');
+      errors.push(
+        tasksRes.reason instanceof Error ? tasksRes.reason.message : 'tasks.json 读取失败',
+      );
     }
     if (habitsRes.status === 'fulfilled') {
       setHabitsStore(habitsRes.value);
     } else {
-      errors.push(habitsRes.reason instanceof Error ? habitsRes.reason.message : 'habits.json 读取失败');
+      errors.push(
+        habitsRes.reason instanceof Error ? habitsRes.reason.message : 'habits.json 读取失败',
+      );
     }
     const loadedReads =
       readsRes.status === 'fulfilled'
         ? readsRes.value
-        : (errors.push(readsRes.reason instanceof Error ? readsRes.reason.message : 'recent-reads.json 读取失败'),
+        : (errors.push(
+            readsRes.reason instanceof Error
+              ? readsRes.reason.message
+              : 'recent-reads.json 读取失败',
+          ),
           { version: 1 as const, records: [] });
 
     setSettings(loadedSettings);
@@ -235,13 +287,16 @@ export const HomePage: React.FC<HomePageProps> = ({
         setHeatmapData(hm);
         setCalendarDays(calMap);
         setTodayDailyNote(todayDoc);
+        if (selectedJournalDate === todayStr) {
+          setSelectedJournalNote(todayDoc);
+        }
       } finally {
         if (reqId === diaryReqIdRef.current) {
           setTodayLoading(false);
         }
       }
     },
-    [api, todayStr],
+    [api, todayStr, selectedJournalDate],
   );
 
   const loadRecentDocs = useCallback(
@@ -291,11 +346,17 @@ export const HomePage: React.FC<HomePageProps> = ({
     setRefreshing(true);
     setErrorBanner(null);
     try {
-      const [{ loadedSettings, loadedReads }, nbs, localStore] = await Promise.all([
+      const [{ loadedSettings, loadedReads }, nbs, localStore, resolvedFont] = await Promise.all([
         loadStoredData(),
         api.lsNotebooks(),
         api.getLocalStorage(),
+        api.getEditorFontFamily
+          ? api.getEditorFontFamily().catch(() => getRuntimeEditorFontFamily())
+          : Promise.resolve(getRuntimeEditorFontFamily()),
       ]);
+      if (resolvedFont) {
+        setEditorFontFamily(resolvedFont);
+      }
       setNotebooks(nbs);
       const localDailyNoteId =
         typeof localStore['local-dailynoteid'] === 'string'
@@ -330,7 +391,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         ),
       ]);
     } catch (err) {
-      setErrorBanner(err instanceof Error ? err.message : '加载个人主页数据时发生错误');
+      reportError(err, '加载个人主页数据时发生错误');
     } finally {
       setRefreshing(false);
     }
@@ -344,11 +405,11 @@ export const HomePage: React.FC<HomePageProps> = ({
     loadStoredData,
     recentKeyword,
     recentNotebookId,
+    reportError,
   ]);
 
   useEffect(() => {
     void bootstrapAll();
-    // Initial load only; subsequent filter changes trigger targeted reloads
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -396,6 +457,10 @@ export const HomePage: React.FC<HomePageProps> = ({
         calMonth,
         settings.showDiaryTodoBadge,
       );
+      if (selectedJournalDate !== todayStr) {
+        const doc = await fetchDailyNoteByDate(api, nbId, selectedJournalDate, nbName);
+        setSelectedJournalNote(doc);
+      }
     }, '切换日记本失败');
   };
 
@@ -422,6 +487,29 @@ export const HomePage: React.FC<HomePageProps> = ({
     }, '加载月历失败');
   };
 
+  const handleSelectJournalDate = async (dateStr: string) => {
+    setSelectedJournalDate(dateStr);
+    const reqId = ++journalPreviewReqIdRef.current;
+    setSelectedJournalLoading(true);
+    try {
+      const doc = await fetchDailyNoteByDate(
+        api,
+        activeDiaryNotebookId,
+        dateStr,
+        activeNotebookName,
+      );
+      if (reqId === journalPreviewReqIdRef.current) {
+        setSelectedJournalNote(doc);
+      }
+    } catch (err) {
+      reportError(err, '读取该日日记预览失败');
+    } finally {
+      if (reqId === journalPreviewReqIdRef.current) {
+        setSelectedJournalLoading(false);
+      }
+    }
+  };
+
   const handleClickDiaryDate = async (dateStr: string) => {
     const lockKey = `${activeDiaryNotebookId}:${dateStr}`;
     if (inFlightDailyDatesRef.current.has(lockKey)) return;
@@ -437,6 +525,15 @@ export const HomePage: React.FC<HomePageProps> = ({
         calMonth,
         settings.showDiaryTodoBadge,
       );
+      if (dateStr === selectedJournalDate) {
+        const refreshed = await fetchDailyNoteByDate(
+          api,
+          activeDiaryNotebookId,
+          dateStr,
+          activeNotebookName,
+        );
+        setSelectedJournalNote(refreshed);
+      }
     } catch (err) {
       reportError(err, '打开或创建日记失败');
     } finally {
@@ -761,8 +858,12 @@ export const HomePage: React.FC<HomePageProps> = ({
     ? visibleHabitsSorted.findIndex((h) => h.id === activeHabit.id)
     : -1;
 
-  const activeTaskCount = useMemo(
-    () => tasksStore.tasks.filter((t) => !t.deleted && !t.completed).length,
+  const topActiveTasks = useMemo(
+    () => sortTasksByPriority(getActiveTasks(tasksStore.tasks)).slice(0, 5),
+    [tasksStore.tasks],
+  );
+  const totalActiveTasks = useMemo(
+    () => getActiveTasks(tasksStore.tasks).length,
     [tasksStore.tasks],
   );
   const doneHabitsTodayCount = useMemo(
@@ -773,70 +874,94 @@ export const HomePage: React.FC<HomePageProps> = ({
     [visibleHabitsSorted, habitsStore.checkins, todayStr],
   );
 
+  const rootStyle = useMemo(() => {
+    if (!settings.followEditorFont || !editorFontFamily) return undefined;
+    const stack = editorFontFamily
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) =>
+        /^['"].*['"]$/.test(p) ||
+        /^(serif|sans-serif|monospace|cursive|fantasy|system-ui)$/i.test(p)
+          ? p
+          : `"${p}"`,
+      )
+      .join(', ');
+    if (!stack) return undefined;
+    return {
+      '--sph-font-editor': `${stack}, var(--b3-font-family-protyle, var(--sph-font-ui))`,
+    } as React.CSSProperties;
+  }, [settings.followEditorFont, editorFontFamily]);
+
   return (
-    <div className={`sph-root ${settings.useThemeAccent ? 'sph-use-accent' : ''}`}>
-      <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-6 sm:py-8 flex flex-col gap-5">
-        <header className="flex flex-wrap items-end justify-between gap-4 pb-1">
-          <div className="min-w-0 flex flex-col gap-1">
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-[22px] font-semibold tracking-tight leading-none">
-                {getGreeting()}，个人主页
-              </h1>
-              <span
-                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium sph-tabular"
-                style={{
-                  backgroundColor: 'var(--sph-card)',
-                  border: '1px solid var(--sph-border)',
-                  color: 'var(--sph-muted)',
-                }}
-              >
-                <span>习惯 {doneHabitsTodayCount}/{visibleHabitsSorted.length}</span>
-                <span style={{ color: 'var(--sph-subtle)' }}>·</span>
-                <span>待办 {activeTaskCount} 项</span>
-              </span>
-            </div>
-            <span className="text-xs sph-tabular" style={{ color: 'var(--sph-muted)' }}>
-              {formatChineseDateHeader(todayStr)}
-            </span>
+    <div
+      className={`sph-root ${settings.useThemeAccent ? 'sph-use-accent' : ''} ${
+        settings.followEditorFont ? '' : 'sph-font-ui-only'
+      }`}
+      style={rootStyle}
+    >
+      {/* Top Minimal Editorial Navigation Bar */}
+      <nav className="sph-nav-bar">
+        <div className="max-w-[1160px] mx-auto px-6 sm:px-10 flex items-center justify-between gap-4">
+          <div className="sph-nav-tabs" role="tablist" aria-label="个人主页功能页签">
+            {SUB_TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeSubTab === tab.key}
+                  onClick={() => setActiveSubTab(tab.key)}
+                  className="sph-nav-tab"
+                >
+                  <Icon size={15} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
-              className="sph-btn px-3 py-1.5"
+              className="sph-btn-ghost px-2.5 py-1.5 text-xs"
               aria-label="刷新主页"
               disabled={refreshing}
               onClick={() => void bootstrapAll()}
             >
               <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-              <span>刷新</span>
+              <span className="hidden sm:inline">刷新</span>
             </button>
             <button
               type="button"
-              className="sph-btn px-3 py-1.5"
+              className="sph-btn-ghost px-2.5 py-1.5 text-xs"
               aria-label="打开设置"
               onClick={() => setSettingsOpen(true)}
             >
               <Settings size={13} />
-              <span>设置</span>
+              <span className="hidden sm:inline">设置</span>
             </button>
           </div>
-        </header>
+        </div>
+      </nav>
 
+      {/* Main Content Container */}
+      <main className="max-w-[1160px] mx-auto px-6 sm:px-10 py-8 sm:py-10 flex flex-col gap-9">
         {errorBanner && (
           <div
-            className="rounded-xl px-4 py-2.5 text-xs flex items-center justify-between gap-2"
+            className="rounded-xl px-4 py-3 text-xs flex items-center justify-between gap-2"
             style={{
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#ef4444',
+              backgroundColor: 'rgba(190, 18, 60, 0.08)',
+              border: '1px solid rgba(190, 18, 60, 0.22)',
+              color: '#be123c',
             }}
           >
             <span>{errorBanner}</span>
             <button
               type="button"
-              className="border-0 bg-transparent cursor-pointer text-xs"
-              style={{ color: '#ef4444' }}
+              className="text-xs font-medium"
+              style={{ color: '#be123c' }}
               onClick={() => setErrorBanner(null)}
             >
               关闭
@@ -844,68 +969,305 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
         )}
 
-        <StatsHeatmapCard
-          stats={stats}
-          heatmap={heatmapData.days}
-          totalBlocksInYear={heatmapData.totalBlocks}
-          activeDaysInYear={heatmapData.activeDays}
-          year={heatmapYear}
-          showHeatmap={settings.showHeatmap}
-          weekStartDay={settings.weekStartDay}
-          onChangeYear={(y) => void handleChangeHeatmapYear(y)}
-          onToggleHeatmap={() => void handlePatchSettings({ showHeatmap: !settings.showHeatmap })}
-          onClickDate={(d) => void handleClickDiaryDate(d)}
-        />
+        {/* TAB 1: OVERVIEW */}
+        {activeSubTab === 'overview' && (
+          <>
+            {/* Editorial Greeting Header */}
+            <header className="flex flex-wrap items-end justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <p
+                  className="text-[12.5px] tracking-[0.06em]"
+                  style={{ color: 'var(--sph-subtle)' }}
+                >
+                  {formatChineseDateHeader(todayStr)}
+                </p>
+                <h1 className="text-[32px] sm:text-[36px] font-medium tracking-[0.03em] leading-tight">
+                  {getGreeting()}
+                </h1>
+              </div>
 
-        <div className="sph-bento-grid">
-          <div className="sph-bento-col-left">
-            <div className="sph-order-today">
-              <TodayDailyNoteCard
-                todayStr={todayStr}
-                dailyNote={todayDailyNote}
-                loading={todayLoading}
-                onOpenDoc={openDoc}
-                onCreateToday={() => void handleClickDiaryDate(todayStr)}
-              />
+              <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--sph-muted)' }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveSubTab('plan')}
+                  className="sph-btn px-3.5 py-2 sph-num-font"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: 'var(--sph-accent)' }}
+                  />
+                  <span>
+                    今日习惯 {doneHabitsTodayCount}/{visibleHabitsSorted.length} · 待办 {totalActiveTasks} 项
+                  </span>
+                </button>
+              </div>
+            </header>
+
+            {/* Editorial Stat Strip + Full-Width Heatmap */}
+            <StatsHeatmapCard
+              stats={stats}
+              heatmap={heatmapData.days}
+              totalBlocksInYear={heatmapData.totalBlocks}
+              activeDaysInYear={heatmapData.activeDays}
+              year={heatmapYear}
+              showHeatmap={settings.showHeatmap}
+              weekStartDay={settings.weekStartDay}
+              onChangeYear={(y) => void handleChangeHeatmapYear(y)}
+              onToggleHeatmap={() => void handlePatchSettings({ showHeatmap: !settings.showHeatmap })}
+              onClickDate={(d) => void handleClickDiaryDate(d)}
+            />
+
+            {/* Focus Row: Left Today's Journal + Right Today's Rhythm Snapshot */}
+            <div className="sph-bento-grid">
+              <div className="sph-bento-col-left h-full">
+                <div className="sph-order-today h-full">
+                  <TodayDailyNoteCard
+                    todayStr={todayStr}
+                    dailyNote={todayDailyNote}
+                    loading={todayLoading}
+                    onOpenDoc={openDoc}
+                    onCreateToday={() => void handleClickDiaryDate(todayStr)}
+                  />
+                </div>
+              </div>
+
+              <div className="sph-bento-col-right h-full">
+                <section className="flex flex-col gap-3 h-full">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-[16px] font-medium tracking-wide">今日节奏</h2>
+                    <button
+                      type="button"
+                      className="sph-btn-ghost px-2 py-1 text-xs"
+                      onClick={() => setActiveSubTab('plan')}
+                    >
+                      <span>管理全部</span>
+                      <ArrowRight size={13} />
+                    </button>
+                  </div>
+
+                  <div className="sph-panel p-5 flex flex-col gap-4 flex-1">
+                    {/* Quick Habits Strip */}
+                    <div className="flex flex-col gap-2">
+                      <div className="text-xs" style={{ color: 'var(--sph-subtle)' }}>
+                        习惯打卡
+                      </div>
+                      {visibleHabitsSorted.length === 0 ? (
+                        <div className="text-xs" style={{ color: 'var(--sph-muted)' }}>
+                          还没有设置习惯，去「计划与习惯」添加一个吧。
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {visibleHabitsSorted.map((h) => {
+                            const done = Boolean(habitsStore.checkins[h.id]?.[todayStr]?.done);
+                            return (
+                              <button
+                                key={h.id}
+                                type="button"
+                                onClick={() => void handleToggleHabitToday(h.id)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all"
+                                style={{
+                                  backgroundColor: done ? h.color : 'var(--sph-card)',
+                                  color: done ? '#ffffff' : 'var(--sph-text)',
+                                  border: `1px solid ${done ? h.color : 'var(--sph-hairline)'}`,
+                                }}
+                              >
+                                {done ? <Check size={12} strokeWidth={3} /> : <span>{h.icon}</span>}
+                                <span>{h.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quick Priority Tasks */}
+                    <div
+                      className="flex flex-col gap-1.5 pt-3"
+                      style={{ borderTop: '1px solid var(--sph-hairline)' }}
+                    >
+                      <div className="text-xs pb-0.5" style={{ color: 'var(--sph-subtle)' }}>
+                        近期重点待办
+                      </div>
+                      {topActiveTasks.length === 0 ? (
+                        <div className="text-xs py-1" style={{ color: 'var(--sph-muted)' }}>
+                          暂无待办事项，享受清净的一天。
+                        </div>
+                      ) : (
+                        topActiveTasks.map((t) => {
+                          const pm = PRIORITY_BADGE[t.priority];
+                          return (
+                            <div
+                              key={t.id}
+                              className="flex items-center gap-2.5 py-1.5 text-[13.5px]"
+                            >
+                              <button
+                                type="button"
+                                aria-label={`完成任务 ${t.title}`}
+                                onClick={() => void handleToggleTaskComplete(t.id)}
+                                className="w-4 h-4 rounded-[5px] shrink-0 flex items-center justify-center"
+                                style={{ border: '1.5px solid var(--sph-border-strong)' }}
+                              />
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10.5px] shrink-0"
+                                style={{ backgroundColor: pm.bg, color: pm.color }}
+                              >
+                                {pm.label}
+                              </span>
+                              <span className="truncate flex-1">{t.title}</span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </section>
+              </div>
             </div>
 
-            <div className="sph-order-recent">
-              <RecentDocsCard
-                activeTab={recentTab}
-                onChangeTab={(tab) => void handleChangeRecentTab(tab)}
-                items={recentItems}
-                hasMore={recentHasMore}
-                loading={recentLoading}
-                hideDailyNotes={settings.hideDailyNotesInRecent}
-                onToggleHideDailyNotes={() => void handleToggleHideDailyNotes()}
-                notebookId={recentNotebookId}
-                notebooks={notebooks}
-                onChangeNotebook={(nbId) => void handleChangeRecentNotebook(nbId)}
-                keyword={recentKeyword}
-                onChangeKeyword={(kw) => handleChangeRecentKeyword(kw)}
-                onLoadMore={() =>
-                  void loadRecentDocs(
-                    recentTab,
-                    notebooks,
-                    recentReadsStore,
-                    settings.hideDailyNotesInRecent,
-                    recentNotebookId,
-                    recentKeyword,
-                    recentOffset + PAGE_SIZE,
-                    true,
-                  )
-                }
-                onOpenDoc={openDoc}
-              />
-            </div>
+            {/* Selected Recent Notes Gallery */}
+            <section className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-baseline gap-2.5">
+                  <h2 className="text-[16px] font-medium tracking-wide">近期笔记</h2>
+                  <span className="text-xs" style={{ color: 'var(--sph-subtle)' }}>
+                    {recentTab === 'modified' ? '按最近修改排序' : '按最近阅读排序'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="sph-btn-ghost px-2 py-1 text-xs"
+                  onClick={() => setActiveSubTab('notes')}
+                >
+                  <span>进入全部笔记</span>
+                  <ArrowRight size={13} />
+                </button>
+              </div>
+
+              {recentItems.length === 0 ? (
+                <div className="sph-panel py-8 text-center text-xs" style={{ color: 'var(--sph-muted)' }}>
+                  暂无近期笔记
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {recentItems.slice(0, 4).map((doc) => (
+                    <article
+                      key={doc.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openDoc(doc.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openDoc(doc.id);
+                        }
+                      }}
+                      className="sph-doc-card p-4 sm:p-5 flex gap-4 cursor-pointer"
+                    >
+                      <div className="min-w-0 flex-1 flex flex-col justify-between gap-2.5">
+                        <div>
+                          <div className="flex items-center gap-1.5 text-[15.5px] font-medium leading-snug">
+                            {doc.icon?.type === 'emoji' && (
+                              <span className="text-sm shrink-0">{doc.icon.value}</span>
+                            )}
+                            <span className="truncate">{doc.title}</span>
+                          </div>
+                          {doc.snippet && (
+                            <p
+                              className="text-[13.5px] mt-1.5 leading-relaxed sph-line-clamp-2"
+                              style={{ color: 'var(--sph-muted)' }}
+                            >
+                              {doc.snippet}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11.5px]" style={{ color: 'var(--sph-subtle)' }}>
+                          {doc.notebookName && <span>{doc.notebookName}</span>}
+                          <span className="ml-auto sph-num-font">
+                            {formatRelativeTime(doc.readAtMs ?? doc.updatedAtMs, Date.now())}
+                          </span>
+                        </div>
+                      </div>
+                      {doc.thumbnailUrl && (
+                        <div
+                          className="w-24 h-[72px] rounded-xl overflow-hidden shrink-0 self-center"
+                          style={{ border: '1px solid var(--sph-hairline)' }}
+                        >
+                          <img
+                            src={doc.thumbnailUrl}
+                            alt={doc.title}
+                            loading="lazy"
+                            className="sph-doc-thumb w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {/* TAB 2: NOTES (Notebook Navigator Dual-Pane Studio) */}
+        {activeSubTab === 'notes' && (
+          <div className="flex flex-col gap-6">
+            <header className="flex flex-col gap-1">
+              <h1 className="text-[28px] font-medium tracking-[0.03em] leading-tight">笔记浏览</h1>
+              <p className="text-[13.5px]" style={{ color: 'var(--sph-muted)' }}>
+                按笔记本、标签与最近读写快速回到你的思考上下文
+              </p>
+            </header>
+
+            <RecentDocsCard
+              navigatorMode
+              viewMode={settings.recentViewMode ?? 'list'}
+              onChangeViewMode={(mode) => void handlePatchSettings({ recentViewMode: mode })}
+              activeTab={recentTab}
+              onChangeTab={(tab) => void handleChangeRecentTab(tab)}
+              items={recentItems}
+              hasMore={recentHasMore}
+              loading={recentLoading}
+              hideDailyNotes={settings.hideDailyNotesInRecent}
+              onToggleHideDailyNotes={() => void handleToggleHideDailyNotes()}
+              notebookId={recentNotebookId}
+              notebooks={notebooks}
+              onChangeNotebook={(nbId) => void handleChangeRecentNotebook(nbId)}
+              keyword={recentKeyword}
+              onChangeKeyword={(kw) => handleChangeRecentKeyword(kw)}
+              onLoadMore={() =>
+                void loadRecentDocs(
+                  recentTab,
+                  notebooks,
+                  recentReadsStore,
+                  settings.hideDailyNotesInRecent,
+                  recentNotebookId,
+                  recentKeyword,
+                  recentOffset + PAGE_SIZE,
+                  true,
+                )
+              }
+              onOpenDoc={openDoc}
+            />
           </div>
+        )}
 
-          <div className="sph-bento-col-right">
-            <div className="sph-order-calendar">
+        {/* TAB 3: JOURNAL & CALENDAR */}
+        {activeSubTab === 'journal' && (
+          <div className="flex flex-col gap-8">
+            <header className="flex flex-col gap-1">
+              <h1 className="text-[28px] font-medium tracking-[0.03em] leading-tight">日记与日历</h1>
+              <p className="text-[13.5px]" style={{ color: 'var(--sph-muted)' }}>
+                点选日历任意一天即可翻阅当日日记摘录，或一键按模板新建日记
+              </p>
+            </header>
+
+            <div className="sph-journal-split">
               <MiniCalendarCard
+                expanded
                 year={calYear}
                 month={calMonth}
                 todayStr={todayStr}
+                selectedDate={selectedJournalDate}
                 weekStartDay={settings.weekStartDay}
                 showTodoBadge={settings.showDiaryTodoBadge}
                 daysMap={calendarDays}
@@ -913,15 +1275,56 @@ export const HomePage: React.FC<HomePageProps> = ({
                 activeNotebookId={activeDiaryNotebookId}
                 onChangeMonth={(y, m) => void handleChangeCalendarMonth(y, m)}
                 onSelectNotebook={(nbId) => void handleSelectDiaryNotebook(nbId)}
-                onClickDate={(d) => void handleClickDiaryDate(d)}
+                onClickDate={(d) => void handleSelectJournalDate(d)}
                 onJumpToday={() => {
                   void handleChangeCalendarMonth(currentYear, currentMonth);
-                  void handleClickDiaryDate(todayStr);
+                  void handleSelectJournalDate(todayStr);
                 }}
+              />
+
+              <TodayDailyNoteCard
+                expanded
+                todayStr={selectedJournalDate}
+                heading={selectedJournalDate === todayStr ? '今日日记' : '日记预览'}
+                createLabel={
+                  selectedJournalDate === todayStr ? '写今天的日记' : '创建这一天的日记'
+                }
+                dailyNote={
+                  selectedJournalDate === todayStr ? todayDailyNote : selectedJournalNote
+                }
+                loading={selectedJournalDate === todayStr ? todayLoading : selectedJournalLoading}
+                onOpenDoc={openDoc}
+                onCreateToday={() => void handleClickDiaryDate(selectedJournalDate)}
               />
             </div>
 
-            <div className="sph-order-habits">
+            <StatsHeatmapCard
+              heatmapOnly
+              stats={stats}
+              heatmap={heatmapData.days}
+              totalBlocksInYear={heatmapData.totalBlocks}
+              activeDaysInYear={heatmapData.activeDays}
+              year={heatmapYear}
+              showHeatmap={true}
+              weekStartDay={settings.weekStartDay}
+              onChangeYear={(y) => void handleChangeHeatmapYear(y)}
+              onToggleHeatmap={() => undefined}
+              onClickDate={(d) => void handleClickDiaryDate(d)}
+            />
+          </div>
+        )}
+
+        {/* TAB 4: PLAN & HABITS */}
+        {activeSubTab === 'plan' && (
+          <div className="flex flex-col gap-6">
+            <header className="flex flex-col gap-1">
+              <h1 className="text-[28px] font-medium tracking-[0.03em] leading-tight">计划与习惯</h1>
+              <p className="text-[13.5px]" style={{ color: 'var(--sph-muted)' }}>
+                不设焦虑的截止时间，只保留每天的习惯节律与按轻重缓急整理的待办
+              </p>
+            </header>
+
+            <div className="sph-plan-split">
               <HabitCard
                 habits={habitsStore.habits}
                 checkins={habitsStore.checkins}
@@ -932,9 +1335,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                 onOpenDetail={(id) => setActiveHabitId(id)}
                 onCreateHabit={(draft) => void handleCreateHabit(draft)}
               />
-            </div>
 
-            <div className="sph-order-tasks">
               <TaskCard
                 tasks={tasksStore.tasks}
                 categories={tasksStore.categories}
@@ -949,8 +1350,8 @@ export const HomePage: React.FC<HomePageProps> = ({
               />
             </div>
           </div>
-        </div>
-      </div>
+        )}
+      </main>
 
       {activeHabit && (
         <HabitDetailModal

@@ -73,14 +73,14 @@ export async function fetchMonthCalendarDays(
   return map;
 }
 
-export async function fetchTodayDailyNote(
+export async function fetchDailyNoteByDate(
   api: SiYuanClient,
   notebookId: string,
-  todayStr: string,
+  dateStr: string,
   notebookName: string,
 ): Promise<DocPreviewItem | null> {
   if (!notebookId) return null;
-  const compact = todayStr.replace(/-/g, '');
+  const compact = dateStr.replace(/-/g, '');
   const safeBox = escapeSqlString(notebookId);
 
   const attrRows = await api.sql<{ root_id: string }>(
@@ -101,7 +101,7 @@ export async function fetchTodayDailyNote(
       updated: string;
     }>(`SELECT id, box, hpath, content, tag, ial, updated FROM blocks WHERE id = '${safeDocId}' AND type = 'd' LIMIT 1`),
     api.sql<{ content: string; markdown: string }>(
-      `SELECT content, markdown FROM blocks WHERE root_id = '${safeDocId}' AND type IN ('p','h','c','m','t') AND content != '' ORDER BY sort ASC LIMIT 12`,
+      `SELECT content, markdown FROM blocks WHERE root_id = '${safeDocId}' AND type IN ('p','h','c','m','t') AND content != '' ORDER BY sort ASC LIMIT 16`,
     ),
     api.sql<{ totalWords: number | null }>(
       `SELECT COALESCE(SUM(length), 0) AS totalWords FROM blocks WHERE root_id = '${safeDocId}' AND type IN ('p','h','c','m','t','html','callout')`,
@@ -123,17 +123,26 @@ export async function fetchTodayDailyNote(
     box: doc.box,
     notebookName,
     hpath: doc.hpath,
-    title: doc.content || todayStr,
+    title: doc.content || dateStr,
     icon: extractDocIcon(doc.ial),
     snippet: cleanSnippetMarkdown(
       bodyRows.map((b) => b.markdown || b.content || ''),
-      220,
+      320,
     ),
     thumbnailUrl: titleImg || assetImg,
     tags: parseTags(doc.tag),
     updatedAtMs: parseSiYuanTimestamp(doc.updated),
     wordCount,
   };
+}
+
+export async function fetchTodayDailyNote(
+  api: SiYuanClient,
+  notebookId: string,
+  todayStr: string,
+  notebookName: string,
+): Promise<DocPreviewItem | null> {
+  return fetchDailyNoteByDate(api, notebookId, todayStr, notebookName);
 }
 
 function replaceNowWithDate(template: string, dateStr: string): string {

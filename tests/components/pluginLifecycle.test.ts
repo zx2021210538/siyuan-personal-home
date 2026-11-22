@@ -128,6 +128,7 @@ describe('PersonalHomePlugin lifecycle (Task 10)', () => {
         showHeatmap: true,
         showDiaryTodoBadge: true,
         useThemeAccent: true,
+        followEditorFont: true,
         hideDailyNotesInRecent: false,
         recentTab: 'modified',
         diaryNotebookId: '',

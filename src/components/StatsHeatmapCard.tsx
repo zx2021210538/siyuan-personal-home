@@ -1,15 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  Activity,
-  BookOpen,
-  CalendarCheck2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  FileText,
-  Flame,
-} from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { parseDateToUtcMs } from '../domain/habitStats';
 import type { HeatmapDay, OverviewStats, WeekStartDay } from '../domain/types';
 
@@ -21,6 +11,7 @@ export interface StatsHeatmapCardProps {
   year: number;
   showHeatmap: boolean;
   weekStartDay: WeekStartDay;
+  heatmapOnly?: boolean;
   onChangeYear: (year: number) => void;
   onToggleHeatmap: () => void;
   onClickDate: (dateStr: string) => void;
@@ -51,6 +42,7 @@ export const StatsHeatmapCard: React.FC<StatsHeatmapCardProps> = ({
   year,
   showHeatmap,
   weekStartDay,
+  heatmapOnly = false,
   onChangeYear,
   onToggleHeatmap,
   onClickDate,
@@ -92,35 +84,15 @@ export const StatsHeatmapCard: React.FC<StatsHeatmapCardProps> = ({
     return { weeks: cols, monthLabels: labels };
   }, [heatmap, weekStartDay]);
 
-  const statTiles = [
+  const statItems = [
+    { label: '文档总数', value: stats.totalDocs.toLocaleString(), note: '篇' },
     {
-      label: '文档总数',
-      value: stats.totalDocs.toLocaleString(),
-      sub: '全工作区笔记',
-      icon: FileText,
-      tint: '#3b82f6',
-    },
-    {
-      label: '总字数',
+      label: '累计字数',
       value: formatCompactWords(stats.totalWords),
-      sub: `${stats.totalBlocks.toLocaleString()} 个内容块`,
-      icon: BookOpen,
-      tint: '#8b5cf6',
+      note: `${stats.totalBlocks.toLocaleString()} 块`,
     },
-    {
-      label: '近 7 天活跃',
-      value: String(stats.recent7DaysDocs),
-      sub: '篇近期更新',
-      icon: Flame,
-      tint: '#f59e0b',
-    },
-    {
-      label: '今年日记',
-      value: String(stats.yearDiaryDays),
-      sub: '天已留下记录',
-      icon: CalendarCheck2,
-      tint: '#10b981',
-    },
+    { label: '近 7 日活跃', value: String(stats.recent7DaysDocs), note: '篇更新' },
+    { label: '今年日记', value: String(stats.yearDiaryDays), note: '天' },
   ];
 
   const rowLabels =
@@ -129,106 +101,96 @@ export const StatsHeatmapCard: React.FC<StatsHeatmapCardProps> = ({
       : ['日', '', '二', '', '四', '', '六'];
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-        {statTiles.map((tile) => {
-          const Icon = tile.icon;
-          return (
-            <div key={tile.label} className="sph-stat-tile px-4 py-3.5 flex flex-col justify-between gap-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium" style={{ color: 'var(--sph-muted)' }}>
-                  {tile.label}
+    <section className="flex flex-col gap-6">
+      {!heatmapOnly && (
+        <div
+          className="grid grid-cols-2 sm:grid-cols-4 gap-6 py-4"
+          style={{
+            borderTop: '1px solid var(--sph-hairline)',
+            borderBottom: '1px solid var(--sph-hairline)',
+          }}
+        >
+          {statItems.map((item, idx) => (
+            <div
+              key={item.label}
+              className="flex flex-col gap-1"
+              style={{
+                borderLeft: idx > 0 ? '1px solid var(--sph-hairline)' : 'none',
+                paddingLeft: idx > 0 ? '20px' : '0px',
+              }}
+            >
+              <span className="text-xs tracking-wide" style={{ color: 'var(--sph-muted)' }}>
+                {item.label}
+              </span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="sph-num-font text-[28px] font-semibold tracking-tight leading-none">
+                  {item.value}
                 </span>
-                <span
-                  className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-                  style={{
-                    backgroundColor: `color-mix(in srgb, ${tile.tint} 12%, transparent)`,
-                    color: tile.tint,
-                  }}
-                >
-                  <Icon size={15} strokeWidth={2} />
+                <span className="text-xs" style={{ color: 'var(--sph-subtle)' }}>
+                  {item.note}
                 </span>
-              </div>
-              <div className="min-w-0">
-                <div
-                  className="sph-tabular text-2xl font-semibold tracking-tight leading-none truncate"
-                  style={{ color: 'var(--sph-text)' }}
-                >
-                  {tile.value}
-                </div>
-                <div className="text-[11px] mt-1.5 truncate" style={{ color: 'var(--sph-subtle)' }}>
-                  {tile.sub}
-                </div>
               </div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
-      <div className="sph-card px-4 py-3.5 flex flex-col gap-3">
+      <div className="flex flex-col gap-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <span
-              className="w-6 h-6 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: 'var(--sph-accent-soft)', color: 'var(--sph-accent)' }}
-            >
-              <Activity size={13} />
-            </span>
-            <span className="text-[13px] font-semibold" style={{ color: 'var(--sph-text)' }}>
-              {year} 年度写作热力图
-            </span>
-            <span className="text-xs sph-tabular" style={{ color: 'var(--sph-muted)' }}>
-              {totalBlocksInYear.toLocaleString()} 块 · 活跃 {activeDaysInYear} 天
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-[16px] font-medium tracking-wide">
+              {year} 写作足迹
+            </h2>
+            <span className="text-xs sph-num-font" style={{ color: 'var(--sph-muted)' }}>
+              共 {totalBlocksInYear.toLocaleString()} 块 · 活跃 {activeDaysInYear} 天
             </span>
           </div>
 
           <div className="flex items-center gap-1.5">
             {showHeatmap && (
-              <div
-                className="inline-flex items-center rounded-lg p-0.5"
-                style={{ backgroundColor: 'var(--sph-tile)', border: '1px solid var(--sph-border)' }}
-              >
+              <div className="inline-flex items-center gap-0.5">
                 <button
                   type="button"
                   className="sph-btn-ghost !p-1"
                   aria-label="上一年"
                   onClick={() => onChangeYear(year - 1)}
                 >
-                  <ChevronLeft size={13} />
+                  <ChevronLeft size={14} />
                 </button>
-                <span className="text-xs font-medium px-1.5 sph-tabular">{year}</span>
+                <span className="text-xs font-medium px-1.5 sph-num-font">{year}</span>
                 <button
                   type="button"
                   className="sph-btn-ghost !p-1"
                   aria-label="下一年"
                   onClick={() => onChangeYear(year + 1)}
                 >
-                  <ChevronRight size={13} />
+                  <ChevronRight size={14} />
                 </button>
               </div>
             )}
-            <button
-              type="button"
-              className="sph-btn-ghost px-2 py-1 text-xs"
-              aria-label={showHeatmap ? '折叠热力图' : '展开热力图'}
-              onClick={onToggleHeatmap}
-            >
-              {showHeatmap ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              <span>{showHeatmap ? '收起' : '展开'}</span>
-            </button>
+            {!heatmapOnly && (
+              <button
+                type="button"
+                className="sph-btn-ghost px-2 py-1 text-xs"
+                aria-label={showHeatmap ? '折叠热力图' : '展开热力图'}
+                onClick={onToggleHeatmap}
+              >
+                {showHeatmap ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                <span>{showHeatmap ? '收起' : '展开'}</span>
+              </button>
+            )}
           </div>
         </div>
 
         {showHeatmap && weeks.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <div className="overflow-x-auto pb-1">
-              <div className="min-w-[640px] flex flex-col gap-1">
-                {/* Month labels */}
+          <div className="sph-panel px-4 py-4 flex flex-col gap-2.5">
+            <div className="overflow-x-auto pb-0.5">
+              <div className="min-w-[640px] flex flex-col gap-1.5">
                 <div
-                  className="grid items-center pl-6 text-[10px]"
+                  className="grid items-center pl-6 text-[10.5px] sph-num-font"
                   style={{
                     gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))`,
-                    gap: '3px',
+                    gap: '3.5px',
                     color: 'var(--sph-subtle)',
                   }}
                 >
@@ -242,11 +204,10 @@ export const StatsHeatmapCard: React.FC<StatsHeatmapCardProps> = ({
                   })}
                 </div>
 
-                {/* Day labels + full-width grid */}
-                <div className="flex gap-1.5 items-stretch">
+                <div className="flex gap-2 items-stretch">
                   <div
-                    className="w-4 shrink-0 grid grid-rows-7 text-[10px] items-center text-right pr-0.5 select-none"
-                    style={{ gap: '3px', color: 'var(--sph-subtle)' }}
+                    className="w-4 shrink-0 grid grid-rows-7 text-[10px] items-center text-right select-none"
+                    style={{ gap: '3.5px', color: 'var(--sph-subtle)' }}
                   >
                     {rowLabels.map((lbl, idx) => (
                       <span key={idx} className="leading-none">
@@ -284,8 +245,8 @@ export const StatsHeatmapCard: React.FC<StatsHeatmapCardProps> = ({
             </div>
 
             <div className="flex items-center justify-between text-[11px]" style={{ color: 'var(--sph-subtle)' }}>
-              <span>点击任意格子可直达或创建当日日记</span>
-              <div className="inline-flex items-center gap-1">
+              <span>点击任意日期格可直达或创建当日日记</span>
+              <div className="inline-flex items-center gap-1.5">
                 <span>少</span>
                 {([0, 1, 2, 3, 4] as const).map((lv) => (
                   <span

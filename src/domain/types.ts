@@ -1,6 +1,7 @@
 export type WeekStartDay = 0 | 1; // 0 = Sunday, 1 = Monday
 export type TopBarPosition = 'left' | 'right';
 export type RecentTabKey = 'modified' | 'read';
+export type HomeSubTab = 'overview' | 'notes' | 'journal' | 'plan';
 
 export interface PluginSettings {
   version: 1;
@@ -10,8 +11,10 @@ export interface PluginSettings {
   showHeatmap: boolean;
   showDiaryTodoBadge: boolean;
   useThemeAccent: boolean;
+  followEditorFont: boolean;
   hideDailyNotesInRecent: boolean;
   recentTab: RecentTabKey;
+  recentViewMode?: 'list' | 'grid';
   diaryNotebookId: string;
 }
 
@@ -23,6 +26,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   showHeatmap: true,
   showDiaryTodoBadge: true,
   useThemeAccent: true,
+  followEditorFont: true,
   hideDailyNotesInRecent: false,
   recentTab: 'modified',
   diaryNotebookId: '',

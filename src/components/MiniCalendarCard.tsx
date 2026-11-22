@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MonthCalendarDay, WeekStartDay } from '../domain/types';
 import type { SiYuanNotebook } from '../services/siyuanApi';
 
@@ -7,11 +7,13 @@ export interface MiniCalendarCardProps {
   year: number;
   month: number; // 1..12
   todayStr: string;
+  selectedDate?: string;
   weekStartDay: WeekStartDay;
   showTodoBadge: boolean;
   daysMap: Record<string, MonthCalendarDay>;
   notebooks: SiYuanNotebook[];
   activeNotebookId: string;
+  expanded?: boolean;
   onChangeMonth: (year: number, month: number) => void;
   onSelectNotebook: (notebookId: string) => void;
   onClickDate: (dateStr: string) => void;
@@ -22,11 +24,13 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
   year,
   month,
   todayStr,
+  selectedDate,
   weekStartDay,
   showTodoBadge,
   daysMap,
   notebooks,
   activeNotebookId,
+  expanded = false,
   onChangeMonth,
   onSelectNotebook,
   onClickDate,
@@ -57,45 +61,43 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
   };
 
   return (
-    <section className="sph-card p-5 flex flex-col gap-3.5">
+    <section className="sph-panel p-5 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: 'var(--sph-accent-soft)', color: 'var(--sph-accent)' }}
-          >
-            <Calendar size={14} />
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-[16px] font-semibold tracking-wide">日记月历</h2>
+          <span className="text-xs sph-num-font" style={{ color: 'var(--sph-muted)' }}>
+            {year}年{month}月
           </span>
-          <h2 className="text-[15px] font-semibold">日记月历</h2>
         </div>
 
-        <div
-          className="inline-flex items-center rounded-lg p-0.5"
-          style={{ backgroundColor: 'var(--sph-tile)' }}
-        >
+        <div className="inline-flex items-center gap-0.5">
           <button
             type="button"
             className="sph-btn-ghost !p-1"
             aria-label="上个月"
             onClick={() => shiftMonth(-1)}
           >
-            <ChevronLeft size={14} />
+            <ChevronLeft size={15} />
           </button>
-          <span className="text-xs font-medium px-2 min-w-[76px] text-center sph-tabular">
-            {year}年{month}月
-          </span>
+          <button
+            type="button"
+            className="sph-btn-ghost px-2 py-0.5 text-xs"
+            onClick={onJumpToday}
+          >
+            今天
+          </button>
           <button
             type="button"
             className="sph-btn-ghost !p-1"
             aria-label="下个月"
             onClick={() => shiftMonth(1)}
           >
-            <ChevronRight size={14} />
+            <ChevronRight size={15} />
           </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
         <select
           aria-label="切换日记本"
           className="sph-select flex-1 min-w-0"
@@ -113,21 +115,13 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
             ))
           )}
         </select>
-
-        <button
-          type="button"
-          className="sph-btn px-3 py-1.5 shrink-0"
-          onClick={onJumpToday}
-        >
-          今天
-        </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center pt-0.5">
+      <div className="grid grid-cols-7 gap-1.5 text-center">
         {weekHeaders.map((w) => (
           <div
             key={w}
-            className="text-[11px] font-medium py-1 select-none"
+            className="text-[11px] font-medium py-1.5 select-none"
             style={{ color: 'var(--sph-subtle)' }}
           >
             {w}
@@ -136,10 +130,11 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
 
         {cells.map((cell, idx) => {
           if (!cell) {
-            return <div key={`empty-${idx}`} className="h-9" />;
+            return <div key={`empty-${idx}`} className={expanded ? 'h-11' : 'h-9'} />;
           }
           const info = daysMap[cell.date];
           const isToday = cell.date === todayStr;
+          const isSelected = selectedDate === cell.date && !isToday;
           const hasDiary = Boolean(info?.hasDiary);
           const hasTodo = showTodoBadge && Boolean(info?.hasUnfinishedTodo);
 
@@ -149,7 +144,7 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
               type="button"
               aria-label={`${cell.date}${hasDiary ? ' 已有日记' : ''}`}
               onClick={() => onClickDate(cell.date)}
-              className={`sph-cal-day sph-tabular relative h-9 flex flex-col items-center justify-center text-[12.5px] ${isToday ? 'sph-cal-today' : ''}`}
+              className={`sph-cal-day sph-num-font relative ${expanded ? 'h-11 text-[13.5px]' : 'h-9 text-[12.5px]'} flex flex-col items-center justify-center ${isToday ? 'sph-cal-today' : ''}`}
               style={{
                 backgroundColor: isToday
                   ? 'var(--sph-accent)'
@@ -161,10 +156,8 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
                   : hasDiary
                     ? 'var(--sph-accent)'
                     : 'var(--sph-text)',
-                fontWeight: isToday || hasDiary ? 600 : 400,
-                boxShadow: isToday
-                  ? '0 2px 8px -2px color-mix(in srgb, var(--sph-accent) 55%, transparent)'
-                  : 'none',
+                fontWeight: isToday || hasDiary || isSelected ? 600 : 400,
+                border: isSelected ? '1.5px solid var(--sph-accent)' : '1.5px solid transparent',
               }}
             >
               <span className="leading-none">{cell.day}</span>
@@ -179,7 +172,7 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
                   data-testid={`cal-todo-badge-${cell.date}`}
                   title="日记含未完成待办"
                   className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: '#f59e0b' }}
+                  style={{ backgroundColor: '#d97706' }}
                 />
               )}
             </button>
@@ -188,8 +181,8 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
       </div>
 
       <div
-        className="flex items-center justify-between text-[11px] pt-1"
-        style={{ color: 'var(--sph-subtle)', borderTop: '1px solid var(--sph-border)' }}
+        className="flex items-center justify-between text-[11px] pt-2.5"
+        style={{ color: 'var(--sph-subtle)', borderTop: '1px solid var(--sph-hairline)' }}
       >
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -200,7 +193,7 @@ export const MiniCalendarCard: React.FC<MiniCalendarCardProps> = ({
         </span>
         {showTodoBadge && (
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: '#f59e0b' }} />
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: '#d97706' }} />
             <span>含未完成待办</span>
           </span>
         )}

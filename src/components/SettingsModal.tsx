@@ -166,6 +166,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </span>
             </label>
           </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div>跟随思源编辑器字体</div>
+              <div className="text-[11px]" style={{ color: 'var(--sph-subtle)' }}>
+                自动使用你在思源编辑器设置的字体（如霞鹜文楷）
+              </div>
+            </div>
+            <label className="sph-switch">
+              <input
+                type="checkbox"
+                checked={settings.followEditorFont}
+                onChange={(e) => onChangeSettings({ followEditorFont: e.target.checked })}
+              />
+              <span className="sph-switch-track">
+                <span className="sph-switch-thumb" />
+              </span>
+            </label>
+          </div>
         </div>
 
         <div

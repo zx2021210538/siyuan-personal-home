@@ -31,7 +31,43 @@ export interface SiYuanClient {
   setBlockAttrs(id: string, attrs: Record<string, string>): Promise<void>;
   getLocalStorage(): Promise<Record<string, unknown>>;
   setLocalStorageVal(key: string, val: unknown): Promise<void>;
+  getEditorFontFamily?(): Promise<string>;
   searchDocs(keyword: string): Promise<SearchDocHit[]>;
+}
+
+interface SiYuanFontConf {
+  editor?: { fontFamily?: string };
+  appearance?: {
+    globalFontFamilies?: Array<{ family?: string }>;
+  };
+}
+
+function extractConfiguredFontFamily(conf?: SiYuanFontConf): string {
+  const candidates: string[] = [];
+  const editorFont = conf?.editor?.fontFamily?.trim();
+  if (editorFont) candidates.push(editorFont);
+  const globalFonts = conf?.appearance?.globalFontFamilies;
+  if (Array.isArray(globalFonts)) {
+    for (const item of globalFonts) {
+      const fam = item?.family?.trim();
+      if (fam && !candidates.includes(fam)) {
+        candidates.push(fam);
+      }
+    }
+  }
+  return candidates.join(', ');
+}
+
+export function getRuntimeEditorFontFamily(): string {
+  try {
+    const win = window as unknown as {
+      siyuan?: { config?: SiYuanFontConf };
+    };
+    return extractConfiguredFontFamily(win?.siyuan?.config);
+  } catch {
+    // ignore non-browser env
+  }
+  return '';
 }
 
 export function escapeSqlString(val: string): string {
@@ -115,6 +151,17 @@ export function createSiYuanClient(): SiYuanClient {
 
     async setLocalStorageVal(key: string, val: unknown): Promise<void> {
       await postApi('/api/storage/setLocalStorageVal', { key, val });
+    },
+
+    async getEditorFontFamily(): Promise<string> {
+      const runtime = getRuntimeEditorFontFamily();
+      if (runtime) return runtime;
+      try {
+        const data = await postApi<{ conf?: SiYuanFontConf }>('/api/system/getConf');
+        return extractConfiguredFontFamily(data?.conf);
+      } catch {
+        return '';
+      }
     },
 
     async searchDocs(keyword: string): Promise<SearchDocHit[]> {

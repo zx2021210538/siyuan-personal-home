@@ -7,7 +7,6 @@ import {
   ChevronRight,
   ExternalLink,
   Link2,
-  ListTodo,
   Plus,
   Settings2,
   Trash2,
@@ -37,12 +36,12 @@ export interface TaskCardProps {
 }
 
 const PRIORITY_META: Record<TaskPriority, { label: string; color: string; bg: string }> = {
-  high: { label: '高', color: '#e11d48', bg: 'rgba(225, 29, 72, 0.12)' },
-  medium: { label: '中', color: '#d97706', bg: 'rgba(217, 119, 6, 0.12)' },
-  low: { label: '低', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)' },
+  high: { label: '高', color: '#e11d48', bg: 'rgba(225, 29, 72, 0.14)' },
+  medium: { label: '中', color: '#d97706', bg: 'rgba(217, 119, 6, 0.14)' },
+  low: { label: '低', color: '#64748b', bg: 'rgba(100, 116, 139, 0.14)' },
 };
 
-const CAT_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#6b7280'];
+const CAT_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#d97706', '#e11d48', '#6b7280'];
 
 export const TaskCard: React.FC<TaskCardProps> = ({
   tasks,
@@ -120,21 +119,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     return (
       <div
         key={task.id}
-        className="group sph-doc-row px-3 py-2.5 flex items-center gap-2.5 text-[13px]"
-        style={{ opacity: task.completed ? 0.6 : 1 }}
+        className="group sph-doc-row px-3.5 py-3 flex items-center gap-3 text-[14px]"
+        style={{
+          opacity: task.completed ? 0.56 : 1,
+          borderBottom: '1px solid var(--sph-hairline)',
+          borderRadius: '10px',
+        }}
       >
         <button
           type="button"
           aria-label={`完成任务 ${task.title}`}
           onClick={() => onToggleComplete(task.id)}
-          className="w-[18px] h-[18px] rounded-[6px] flex items-center justify-center shrink-0 transition-all"
+          className="w-[19px] h-[19px] rounded-[6px] flex items-center justify-center shrink-0 transition-all"
           style={{
             backgroundColor: task.completed ? 'var(--sph-accent)' : 'transparent',
             border: `1.5px solid ${task.completed ? 'var(--sph-accent)' : 'var(--sph-border-strong)'}`,
             color: 'var(--sph-accent-fg)',
           }}
         >
-          {task.completed && <Check size={11} strokeWidth={3} />}
+          {task.completed && <Check size={12} strokeWidth={3} />}
         </button>
 
         <button
@@ -142,7 +145,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           aria-label={`切换 ${task.title} 优先级`}
           title={`优先级：${pMeta.label}（点击切换）`}
           onClick={() => onUpdateTask(task.id, { priority: cyclePriority(task.priority) })}
-          className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold shrink-0 transition-opacity hover:opacity-80"
+          className="px-2 py-0.5 rounded-md text-[11px] font-medium shrink-0 transition-opacity hover:opacity-80"
           style={{ backgroundColor: pMeta.bg, color: pMeta.color }}
         >
           {pMeta.label}
@@ -171,7 +174,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               }
               if (e.key === 'Escape') setEditingTaskId(null);
             }}
-            className="sph-input flex-1 py-0.5 text-xs"
+            className="sph-input flex-1 py-0.5 text-[13.5px]"
           />
         ) : (
           <span
@@ -196,11 +199,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               const nextCat = validCategories[(idx + 1) % validCategories.length];
               onUpdateTask(task.id, { categoryId: nextCat.id });
             }}
-            className="px-2 py-0.5 rounded-md text-[10.5px] font-medium shrink-0 transition-colors"
+            className="px-2 py-0.5 rounded-md text-[11px] shrink-0"
             style={{
-              backgroundColor: 'var(--sph-card)',
+              backgroundColor: 'var(--sph-wash)',
               color: 'var(--sph-muted)',
-              border: '1px solid var(--sph-border)',
             }}
           >
             {cat.name}
@@ -213,10 +215,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             aria-label={`打开关联笔记 ${task.linkedDocTitle || task.title}`}
             title={task.linkedDocTitle || '打开关联笔记'}
             onClick={() => onOpenDoc(task.linkedDocId!)}
-            className="p-1 rounded-md shrink-0 transition-colors hover:opacity-80"
+            className="p-1 rounded-md shrink-0 hover:opacity-80"
             style={{ color: 'var(--sph-accent)' }}
           >
-            <ExternalLink size={12} />
+            <ExternalLink size={13} />
           </button>
         )}
 
@@ -228,7 +230,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           className="sph-action-reveal p-1 rounded-md shrink-0"
           style={{ color: 'var(--sph-muted)' }}
         >
-          <Link2 size={12} />
+          <Link2 size={13} />
         </button>
 
         <button
@@ -238,7 +240,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           className="sph-action-reveal p-1 rounded-md shrink-0"
           style={{ color: 'var(--sph-muted)' }}
         >
-          <Trash2 size={12} />
+          <Trash2 size={13} />
         </button>
       </div>
     );
@@ -293,36 +295,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   return (
-    <section className="sph-card p-5 flex flex-col gap-3.5">
+    <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: 'var(--sph-accent-soft)', color: 'var(--sph-accent)' }}
-          >
-            <ListTodo size={14} />
+        <div className="flex items-baseline gap-2.5">
+          <h2 className="text-[17px] font-semibold tracking-wide">轻量任务</h2>
+          <span className="text-xs sph-num-font" style={{ color: 'var(--sph-muted)' }}>
+            {activeTasks.length} 项待办
           </span>
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-[15px] font-semibold">轻量任务</h2>
-            <span className="text-xs sph-tabular" style={{ color: 'var(--sph-muted)' }}>
-              {activeTasks.length}
-            </span>
-          </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <div
             className="inline-flex rounded-lg p-0.5 gap-0.5"
-            style={{ backgroundColor: 'var(--sph-tile)' }}
+            style={{ backgroundColor: 'var(--sph-wash)' }}
           >
             <button
               type="button"
               onClick={() => setViewMode('priority')}
-              className="px-2 py-1 rounded-md text-[11px] font-medium transition-all"
+              className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
               style={{
                 backgroundColor: viewMode === 'priority' ? 'var(--sph-card)' : 'transparent',
                 color: viewMode === 'priority' ? 'var(--sph-text)' : 'var(--sph-muted)',
-                boxShadow: viewMode === 'priority' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
               }}
             >
               按优先级
@@ -330,11 +323,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <button
               type="button"
               onClick={() => setViewMode('category')}
-              className="px-2 py-1 rounded-md text-[11px] font-medium transition-all"
+              className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
               style={{
                 backgroundColor: viewMode === 'category' ? 'var(--sph-card)' : 'transparent',
                 color: viewMode === 'category' ? 'var(--sph-text)' : 'var(--sph-muted)',
-                boxShadow: viewMode === 'category' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
               }}
             >
               按维度分组
@@ -353,13 +345,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       </div>
 
       {/* Unified quick add bar (strictly no due dates) */}
-      <div
-        className="rounded-xl p-1.5 flex items-center gap-1.5"
-        style={{
-          backgroundColor: 'var(--sph-tile)',
-          border: '1px solid var(--sph-border)',
-        }}
-      >
+      <div className="sph-panel p-2 flex items-center gap-2">
         <input
           type="text"
           placeholder="输入新任务回车添加..."
@@ -368,14 +354,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleAddTask();
           }}
-          className="flex-1 min-w-0 bg-transparent border-0 outline-none px-2 py-1 text-[12.5px]"
+          className="flex-1 min-w-0 bg-transparent border-0 outline-none px-2 py-1 text-[13.5px]"
           style={{ color: 'var(--sph-text)' }}
         />
         <button
           type="button"
           title="切换新任务优先级"
           onClick={() => setNewPriority((p) => cyclePriority(p))}
-          className="px-2 py-1 rounded-lg text-[11px] font-semibold shrink-0"
+          className="px-2.5 py-1 rounded-lg text-xs font-medium shrink-0"
           style={{
             backgroundColor: PRIORITY_META[newPriority].bg,
             color: PRIORITY_META[newPriority].color,
@@ -387,7 +373,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           aria-label="新任务维度"
           value={effectiveNewCategoryId}
           onChange={(e) => setNewCategoryId(e.target.value)}
-          className="sph-select !py-1 !pl-2 !pr-6 !text-[11px] max-w-[82px]"
+          className="sph-select !py-1 !pl-2.5 !pr-6 !text-xs max-w-[92px]"
         >
           {validCategories.map((cat) => (
             <option key={cat.id} value={cat.id}>
@@ -398,7 +384,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <button
           type="button"
           aria-label="添加任务"
-          className="sph-btn sph-btn-primary !p-1.5 shrink-0"
+          className="sph-btn sph-btn-primary !p-2 shrink-0"
           onClick={handleAddTask}
         >
           <Plus size={14} />
@@ -410,9 +396,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <button
           type="button"
           onClick={() => setFilterCat('all')}
-          className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors"
+          className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
           style={{
-            backgroundColor: filterCat === 'all' ? 'var(--sph-accent)' : 'var(--sph-tile)',
+            backgroundColor: filterCat === 'all' ? 'var(--sph-accent)' : 'var(--sph-wash)',
             color: filterCat === 'all' ? 'var(--sph-accent-fg)' : 'var(--sph-muted)',
           }}
         >
@@ -423,9 +409,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             key={cat.id}
             type="button"
             onClick={() => setFilterCat(cat.id)}
-            className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors"
+            className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
             style={{
-              backgroundColor: filterCat === cat.id ? 'var(--sph-accent)' : 'var(--sph-tile)',
+              backgroundColor: filterCat === cat.id ? 'var(--sph-accent)' : 'var(--sph-wash)',
               color: filterCat === cat.id ? 'var(--sph-accent-fg)' : 'var(--sph-muted)',
             }}
           >
@@ -436,10 +422,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
       {/* Inline category manager */}
       {managingCats && (
-        <div
-          className="rounded-xl p-3 flex flex-col gap-2 text-xs"
-          style={{ backgroundColor: 'var(--sph-tile)', border: '1px solid var(--sph-border)' }}
-        >
+        <div className="sph-panel p-3.5 flex flex-col gap-2.5 text-xs">
           <div className="flex items-center justify-between">
             <span className="font-semibold">维度管理</span>
             <button
@@ -522,23 +505,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
       {/* Task list */}
       {activeTasks.length === 0 ? (
-        <div
-          className="rounded-xl py-6 px-4 text-center text-xs"
-          style={{
-            backgroundColor: 'var(--sph-tile)',
-            color: 'var(--sph-muted)',
-          }}
-        >
+        <div className="sph-panel py-10 px-4 text-center text-[13px]" style={{ color: 'var(--sph-muted)' }}>
           当前没有待办事项，轻松一下或随时在上方记一条。
         </div>
       ) : viewMode === 'priority' ? (
-        <div className="flex flex-col gap-1.5">{activeTasks.map(renderTaskRow)}</div>
+        <div className="flex flex-col">{activeTasks.map(renderTaskRow)}</div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-5">
           {categoryGroups.map((group) => (
-            <div key={group.category.id} className="flex flex-col gap-1.5">
+            <div key={group.category.id} className="flex flex-col gap-1">
               <div
-                className="text-[11px] font-semibold px-1 flex items-center gap-1.5"
+                className="text-xs font-semibold px-1 pb-1 flex items-center gap-2"
                 style={{ color: 'var(--sph-muted)' }}
               >
                 <span
@@ -546,7 +523,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   style={{ backgroundColor: group.category.color }}
                 />
                 <span>{group.category.name}</span>
-                <span className="sph-tabular" style={{ color: 'var(--sph-subtle)' }}>
+                <span className="sph-num-font" style={{ color: 'var(--sph-subtle)' }}>
                   ({group.tasks.length})
                 </span>
               </div>
@@ -558,7 +535,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
       {/* Completed collapsible section */}
       {completedTasks.length > 0 && (
-        <div className="pt-2" style={{ borderTop: '1px solid var(--sph-border)' }}>
+        <div className="pt-2">
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -572,14 +549,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <button
                 type="button"
                 onClick={onClearCompleted}
-                className="sph-btn-ghost px-1.5 py-0.5 text-[11px]"
+                className="sph-btn-ghost px-1.5 py-0.5 text-xs"
               >
                 清空已完成
               </button>
             )}
           </div>
           {showCompleted && (
-            <div className="flex flex-col gap-1.5 mt-2">{completedTasks.map(renderTaskRow)}</div>
+            <div className="flex flex-col mt-2">{completedTasks.map(renderTaskRow)}</div>
           )}
         </div>
       )}
