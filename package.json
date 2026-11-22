@@ -28,6 +28,7 @@
     "@vitejs/plugin-react": "^4.5.0",
     "happy-dom": "^17.4.7",
     "jszip": "^3.10.1",
+    "postcss": "8.5.33",
     "siyuan": "^1.1.11",
     "tailwindcss": "^4.1.7",
     "typescript": "^5.8.3",
